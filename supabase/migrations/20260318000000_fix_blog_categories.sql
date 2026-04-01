@@ -1,0 +1,32 @@
+-- =========================================
+-- BLOG SYSTEM FIX: Use category_id instead of category name
+-- =========================================
+
+-- Add category_id column to blog_posts
+ALTER TABLE public.blog_posts
+ADD COLUMN IF NOT EXISTS category_id uuid REFERENCES public.blog_categories(id);
+
+-- Update existing records to set category_id based on category name
+UPDATE public.blog_posts
+SET category_id = bc.id
+FROM public.blog_categories bc
+WHERE public.blog_posts.category = bc.category_name;
+
+-- Drop the old category column
+ALTER TABLE public.blog_posts DROP COLUMN IF EXISTS category;
+
+-- Update RLS policies to include category_id
+DROP POLICY IF EXISTS "Blog posts viewable by everyone" ON public.blog_posts;
+CREATE POLICY "Blog posts viewable by everyone"
+  ON public.blog_posts FOR SELECT
+  USING (status = 'published' OR public.has_role(auth.uid(), 'admin'));
+
+-- Update the published blog comments policy
+DROP POLICY IF EXISTS "Anyone can view published blog comments" ON public.blog_comments;
+CREATE POLICY "Anyone can view published blog comments"
+  ON public.blog_comments FOR SELECT
+  USING (EXISTS (
+    SELECT 1 FROM public.blog_posts
+    WHERE blog_posts.id = blog_comments.blog_id
+    AND blog_posts.status = 'published'
+  ));
