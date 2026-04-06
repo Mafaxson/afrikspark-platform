@@ -1,3 +1,4 @@
+import { useMemo, useState } from "react";
 import { useParams } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
@@ -7,10 +8,11 @@ import { Section } from "@/components/SectionComponents";
 interface Student {
   id: string;
   full_name: string;
-  email: string;
-  skill?: string;
+  email?: string;
+  skills: string | string[] | null;
   district: string;
-  avatar_url?: string;
+  gender: string | null;
+  image_url?: string | null;
   approved: boolean;
   created_at?: string;
 }
@@ -24,34 +26,88 @@ interface Cohort {
   created_at: string;
 }
 
+function getStorageUrl(bucket: "cohorts" | "students", path: string | null | undefined) {
+  if (!path) return null;
+  if (/^https?:\/\//i.test(path)) return path;
+  const { data } = supabase.storage.from(bucket).getPublicUrl(path);
+  return data?.publicUrl || null;
+}
+
+function normalizeSkills(skills: string | string[] | null) {
+  if (!skills) return [];
+  if (Array.isArray(skills)) return skills.filter(Boolean).map((skill) => String(skill).trim());
+  return String(skills)
+    .split(",")
+    .map((skill) => skill.trim())
+    .filter(Boolean);
+}
+
 export default function CohortPage() {
-  const { id } = useParams<{ id: string }>();
+  const { slug } = useParams<{ slug: string }>();
+
+  const [search, setSearch] = useState("");
+  const [genderFilter, setGenderFilter] = useState("");
+  const [skillFilter, setSkillFilter] = useState("");
+  const [districtFilter, setDistrictFilter] = useState("");
+  const [sortOrder, setSortOrder] = useState<"asc" | "desc">("asc");
 
   const { data, isLoading } = useQuery({
-    queryKey: ['cohortPage', id],
+    queryKey: ['cohortPage', slug],
     queryFn: async () => {
-      if (!id) throw new Error('Cohort ID is required');
+      if (!slug) throw new Error('Cohort slug is required');
 
-      const [cohortRes, studentsRes] = await Promise.all([
-        supabase.from("cohorts").select("*").eq("id", id).single(),
-        supabase.from("community_members").select("*").eq("cohort_id", id).eq("approved", true)
-      ]);
+      const cohortRes = await supabase.from("cohorts").select("*").eq("slug", slug).single();
+      if (cohortRes.error) {
+        if (!cohortRes.data) {
+          return { cohort: null, students: [] };
+        }
+        throw cohortRes.error;
+      }
 
-      if (cohortRes.error) throw cohortRes.error;
+      const cohort = cohortRes.data as Cohort;
+      const studentsRes = await supabase
+        .from("students")
+        .select("*")
+        .eq("cohort_id", cohort.id)
+        .order("full_name", { ascending: true });
+
       if (studentsRes.error) throw studentsRes.error;
 
       return {
-        cohort: cohortRes.data as Cohort,
-        students: studentsRes.data as Student[]
+        cohort,
+        students: studentsRes.data || []
       };
     },
-    enabled: !!id,
+    enabled: !!slug,
     staleTime: 5 * 60 * 1000, // 5 minutes
     refetchOnWindowFocus: false
   });
 
   const cohort = data?.cohort;
   const students = data?.students || [];
+
+  const districtOptions = useMemo(
+    () => Array.from(new Set(students.map((student) => student.district?.trim()).filter(Boolean) as string[])).sort(),
+    [students]
+  );
+
+  const filteredStudents = useMemo(() => {
+    const normalizedSearch = search.trim().toLowerCase();
+
+    return students
+      .filter((student) => {
+        const matchesName = !normalizedSearch || student.full_name.toLowerCase().includes(normalizedSearch);
+        const matchesGender = !genderFilter || (student.gender || "").toLowerCase() === genderFilter.toLowerCase();
+        const skills = normalizeSkills(student.skills);
+        const matchesSkill = !skillFilter || skills.some((skill) => skill.toLowerCase() === skillFilter.toLowerCase());
+        const matchesDistrict = !districtFilter || (student.district || "").toLowerCase().includes(districtFilter.toLowerCase());
+        return matchesName && matchesGender && matchesSkill && matchesDistrict;
+      })
+      .sort((a, b) => {
+        if (sortOrder === "asc") return a.full_name.localeCompare(b.full_name);
+        return b.full_name.localeCompare(a.full_name);
+      });
+  }, [students, search, genderFilter, skillFilter, districtFilter, sortOrder]);
 
   if (isLoading) {
     return (
@@ -83,7 +139,7 @@ export default function CohortPage() {
         {cohort.banner_url && (
           <div className="h-64 bg-gradient-to-r from-primary/20 to-secondary/20 relative overflow-hidden">
             <img
-              src={cohort.banner_url}
+              src={getStorageUrl("cohorts", cohort.banner_url) || undefined}
               alt={cohort.name}
               className="w-full h-full object-cover"
             />
@@ -107,26 +163,82 @@ export default function CohortPage() {
 
       {/* Students Grid */}
       <Section>
-        <h2 className="text-2xl font-bold mb-8">Students</h2>
+        <div className="mb-6 flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
+          <div>
+            <h2 className="text-2xl font-bold">Students</h2>
+            <p className="text-sm text-muted-foreground mt-1">Search and filter students for this cohort.</p>
+          </div>
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4 w-full lg:w-auto">
+            <select
+              value={sortOrder}
+              onChange={(e) => setSortOrder(e.target.value as "asc" | "desc")}
+              className="h-11 rounded-xl border border-border bg-background px-4 text-sm text-foreground"
+            >
+              <option value="asc">Alphabetical A–Z</option>
+              <option value="desc">Alphabetical Z–A</option>
+            </select>
+            <select
+              value={genderFilter}
+              onChange={(e) => setGenderFilter(e.target.value)}
+              className="h-11 rounded-xl border border-border bg-background px-4 text-sm text-foreground"
+            >
+              <option value="">All Genders</option>
+              <option value="Male">Male</option>
+              <option value="Female">Female</option>
+            </select>
+            <select
+              value={skillFilter}
+              onChange={(e) => setSkillFilter(e.target.value)}
+              className="h-11 rounded-xl border border-border bg-background px-4 text-sm text-foreground"
+            >
+              <option value="">All Skills</option>
+              <option value="Content Creation">Content Creation</option>
+              <option value="Graphic Design">Graphic Design</option>
+              <option value="Videography">Videography</option>
+              <option value="Photography">Photography</option>
+              <option value="Web Development">Web Development</option>
+            </select>
+            <select
+              value={districtFilter}
+              onChange={(e) => setDistrictFilter(e.target.value)}
+              className="h-11 rounded-xl border border-border bg-background px-4 text-sm text-foreground"
+            >
+              <option value="">All Districts</option>
+              {districtOptions.map((district) => (
+                <option key={district} value={district}>{district}</option>
+              ))}
+            </select>
+          </div>
+        </div>
 
-        {students.length === 0 ? (
+        <div className="mb-6">
+          <input
+            type="search"
+            placeholder="Search by name"
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            className="w-full rounded-xl border border-border bg-background px-4 py-3 text-sm text-foreground"
+          />
+        </div>
+
+        {filteredStudents.length === 0 ? (
           <div className="text-center py-12">
             <div className="w-24 h-24 bg-muted rounded-full flex items-center justify-center mx-auto mb-4">
               <svg className="w-12 h-12 text-muted-foreground" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
               </svg>
             </div>
-            <h3 className="text-xl font-semibold mb-2">No students in this cohort yet</h3>
-            <p className="text-muted-foreground">Students will be added to this cohort as they join the program.</p>
+            <h3 className="text-xl font-semibold mb-2">No students match your search.</h3>
+            <p className="text-muted-foreground">Try clearing filters or using a different name.</p>
           </div>
         ) : (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {students.map((student) => (
+          <div className="grid grid-cols-1 gap-6 md:grid-cols-2 lg:grid-cols-3">
+            {filteredStudents.map((student) => (
               <div key={student.id} className="bg-card rounded-xl p-6 border border-border hover:shadow-md transition-shadow">
                 <div className="flex items-start gap-4">
-                  {student.avatar_url ? (
+                  {student.image_url ? (
                     <img
-                      src={student.avatar_url}
+                      src={getStorageUrl("students", student.image_url) || undefined}
                       alt={student.full_name}
                       className="w-16 h-16 rounded-full object-cover flex-shrink-0"
                     />
@@ -139,13 +251,15 @@ export default function CohortPage() {
                   )}
                   <div className="flex-1 min-w-0">
                     <h3 className="font-semibold text-lg mb-1 truncate">{student.full_name}</h3>
-                    <p className="text-sm text-muted-foreground mb-1">{student.district}</p>
-                    {student.skill && (
-                      <p className="text-sm text-primary mb-2">{student.skill}</p>
-                    )}
-                    <p className="text-xs text-muted-foreground">
-                      Joined {new Date(student.created_at || '').toLocaleDateString()}
-                    </p>
+                    <p className="text-sm text-muted-foreground mb-1">{student.gender || "Gender not specified"}</p>
+                    <p className="text-sm text-primary mb-2">{student.district || "District unknown"}</p>
+                    <div className="flex flex-wrap gap-2">
+                      {normalizeSkills(student.skills).map((skill) => (
+                        <span key={skill} className="rounded-full border border-primary/20 bg-primary/5 px-3 py-1 text-xs text-primary">
+                          {skill}
+                        </span>
+                      ))}
+                    </div>
                   </div>
                 </div>
               </div>

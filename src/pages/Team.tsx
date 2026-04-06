@@ -22,7 +22,7 @@ export default function Team() {
         const { data, error } = await supabase
           .from('team_members')
           .select('*')
-          .order('created_at', { ascending: false });
+          .order('position', { ascending: true, nulls: 'last' });
 
         if (error) {
           console.error('Error fetching team members:', error);

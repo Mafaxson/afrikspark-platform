@@ -72,25 +72,43 @@ const whyJoin = [
   { icon: MessageCircle, title: "Private Community Access", description: "Join our exclusive Slack-like community to collaborate, share opportunities, and grow together." },
 ];
 
-interface CommunityMember {
+interface Student {
   id: string;
-  name: string;
-  avatar_url: string | null;
-  skill: string | null;
+  full_name: string;
+  image_url: string | null;
+  skills: string | string[] | null;
   district: string | null;
+  gender: string | null;
   cohort_id: string | null;
 }
 
 interface Cohort {
   id: string;
+  slug: string;
   name: string;
   description: string | null;
-  students: CommunityMember[];
+  banner_url: string | null;
+  year?: number;
+}
+
+function getStorageUrl(bucket: "cohorts" | "students", path: string | null | undefined) {
+  if (!path) return null;
+  if (/^https?:\/\//i.test(path)) return path;
+  const { data } = supabase.storage.from(bucket).getPublicUrl(path);
+  return data?.publicUrl || null;
+}
+
+function normalizeSkills(skills: string | string[] | null) {
+  if (!skills) return [];
+  if (Array.isArray(skills)) return skills.filter(Boolean).map((skill) => String(skill).trim());
+  return String(skills)
+    .split(",")
+    .map((skill) => skill.trim())
+    .filter(Boolean);
 }
 
 export default function DSS() {
   const [cohorts, setCohorts] = useState<Cohort[]>([]);
-  const [selectedCohort, setSelectedCohort] = useState<Cohort | null>(null);
   const [isLoadingCohorts, setIsLoadingCohorts] = useState(true);
   const isMountedRef = useRef(true);
 
@@ -99,8 +117,8 @@ export default function DSS() {
       try {
         const { data: cohortsData, error } = await supabase
           .from("cohorts")
-          .select("id,name,description")
-          .order("name", { ascending: true });
+          .select("*")
+          .order("year", { ascending: false });
 
         if (!isMountedRef.current) return;
 
@@ -110,42 +128,10 @@ export default function DSS() {
           return;
         }
 
-        if (!cohortsData) {
-          setCohorts([]);
-          setIsLoadingCohorts(false);
-          return;
-        }
-
-        const withStudents = await Promise.all(
-          cohortsData.map(async (cohort) => {
-            const { data: members, error: membersError } = await supabase
-              .from("students")
-              .select("id,name,photo_url,skill,city,cohort_id")
-              .eq("cohort_id", cohort.id);
-
-            if (membersError) {
-              console.error("Failed to load members for cohort", cohort.id, membersError);
-            }
-
-            const transformedMembers = (members ?? []).map(member => ({
-              id: member.id,
-              name: member.name,
-              avatar_url: member.photo_url,
-              skill: member.skill,
-              district: member.city,
-              cohort_id: member.cohort_id
-            }));
-
-            return { ...cohort, students: transformedMembers };
-          })
-        );
-
-        if (isMountedRef.current) {
-          setCohorts(withStudents);
-          setIsLoadingCohorts(false);
-        }
+        setCohorts((cohortsData || []) as Cohort[]);
       } catch (error) {
         console.error("Cohorts fetch unexpected error", error);
+      } finally {
         if (isMountedRef.current) {
           setIsLoadingCohorts(false);
         }
@@ -158,51 +144,6 @@ export default function DSS() {
       isMountedRef.current = false;
     };
   }, []);
-
-  const openCohort = async (cohort: Cohort) => {
-    if (!isMountedRef.current) return;
-
-    try {
-      if (cohort.students.length === 0) {
-        const { data: students, error } = await supabase
-          .from("students")
-          .select("id,name,photo_url,skill,city,cohort_id")
-          .eq("cohort_id", cohort.id);
-
-        if (!isMountedRef.current) return;
-
-        if (error) {
-          console.error("Failed to load cohort students", error);
-          return;
-        }
-
-        const transformedStudents = (students ?? []).map(student => ({
-          id: student.id,
-          name: student.name,
-          avatar_url: student.photo_url,
-          skill: student.skill,
-          district: student.city,
-          cohort_id: student.cohort_id
-        }));
-
-        const updated = { ...cohort, students: transformedStudents };
-
-        // Update both selected cohort and the cohorts array atomically
-        setSelectedCohort(updated);
-        setCohorts((prev) => prev.map((c) => (c.id === cohort.id ? updated : c)));
-      } else {
-        setSelectedCohort(cohort);
-      }
-    } catch (error) {
-      console.error("Error in openCohort", error);
-    }
-  };
-
-  const closeCohort = () => {
-    if (isMountedRef.current) {
-      setSelectedCohort(null);
-    }
-  };
 
   return (
     <Layout>
@@ -343,76 +284,34 @@ export default function DSS() {
             <p className="mt-2 text-muted-foreground">Loading cohorts...</p>
           </div>
         ) : (
-          <>
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-              {(cohorts ?? []).map((cohort) => (
-                <AnimateOnScroll key={cohort.id}>
-                  <div
-                    onClick={() => openCohort(cohort)}
-                    className="cursor-pointer overflow-hidden rounded-xl border border-border bg-card shadow-sm hover:shadow-md transition-shadow"
-                  >
-                    <div className="h-44 w-full overflow-hidden relative">
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+            {(cohorts ?? []).map((cohort) => (
+              <AnimateOnScroll key={cohort.id}>
+                <Link
+                  to={`/cohort/${cohort.slug}`}
+                  className="block overflow-hidden rounded-xl border border-border bg-card shadow-sm hover:shadow-md transition-shadow"
+                >
+                  <div className="h-44 w-full overflow-hidden relative">
+                    {cohort.banner_url ? (
+                      <img
+                        src={getStorageUrl("cohorts", cohort.banner_url) || undefined}
+                        alt={cohort.name}
+                        className="h-full w-full object-cover"
+                      />
+                    ) : (
                       <div className="h-full w-full bg-slate-200 flex items-center justify-center">
                         <span className="text-muted-foreground">Cohort {cohort.name}</span>
                       </div>
-                    </div>
-                    <div className="p-4">
-                      <h3 className="text-lg font-bold">{cohort.name}</h3>
-                      <p className="text-sm text-muted-foreground mt-1 line-clamp-2">{cohort.description || "No description available."}</p>
-                    </div>
-                  </div>
-                </AnimateOnScroll>
-              ))}
-            </div>
-
-            {selectedCohort && (
-              <AnimateOnScroll>
-                <div className="mt-8 rounded-xl border border-border bg-card p-6 relative">
-                  <button
-                    onClick={closeCohort}
-                    className="absolute top-4 right-4 p-2 rounded-full bg-muted hover:bg-muted/80 transition-colors"
-                    aria-label="Close cohort details"
-                  >
-                    ×
-                  </button>
-                  <div className="relative h-56 w-full overflow-hidden rounded-xl">
-                    <div className="h-full w-full bg-slate-200 flex items-center justify-center">
-                      <span className="text-muted-foreground">Cohort {selectedCohort.name}</span>
-                    </div>
-                  </div>
-                  <div className="mt-4">
-                    <h3 className="text-2xl font-bold">{selectedCohort.name}</h3>
-                    <p className="text-muted-foreground mt-2">{selectedCohort.description || "No cohort description available."}</p>
-                  </div>
-                  <div className="mt-6 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                    {selectedCohort.students.length === 0 ? (
-                      <div className="col-span-full text-center text-muted-foreground">No members found in this cohort.</div>
-                    ) : (
-                      selectedCohort.students.map((member) => (
-                        <div
-                          key={member.id}
-                          className="rounded-xl border border-border bg-white p-4 shadow-sm hover:shadow-md transition-shadow cursor-pointer"
-                          onClick={() => window.alert(`Open profile for ${member.name}`)}
-                        >
-                          <div className="flex items-center gap-3">
-                            <Avatar className="h-12 w-12">
-                              <AvatarImage src={member.avatar_url || "/placeholder-avatar.jpg"} />
-                              <AvatarFallback>{member.name?.[0] || "U"}</AvatarFallback>
-                            </Avatar>
-                            <div>
-                              <p className="font-semibold">{member.name || "Unknown Member"}</p>
-                              <p className="text-xs text-muted-foreground">{member.skill || "Skill unknown"}</p>
-                            </div>
-                          </div>
-                          <p className="mt-3 text-sm text-muted-foreground">{member.district || "District unknown"}</p>
-                        </div>
-                      ))
                     )}
                   </div>
-                </div>
+                  <div className="p-4">
+                    <h3 className="text-lg font-bold">{cohort.name}</h3>
+                    <p className="text-sm text-muted-foreground mt-1 line-clamp-2">{cohort.description || "No description available."}</p>
+                  </div>
+                </Link>
               </AnimateOnScroll>
-            )}
-          </>
+            ))}
+          </div>
         )}
       </Section>
 
