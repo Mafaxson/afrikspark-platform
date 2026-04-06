@@ -1,5 +1,4 @@
 import { useCallback, useEffect, useState } from "react";
-import { useNavigate } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import { useAuth } from "@/contexts/AuthContext";
 import { supabase } from "@/integrations/supabase/client";
@@ -15,7 +14,7 @@ import { BlogManagement } from "@/components/admin/BlogManagement";
 import { TestimonialManagement } from "@/components/admin/TestimonialManagement";
 import { FileUploadService } from "@/lib/uploadService";
 import {
-  Users, FileText, MessageSquare, GraduationCap, BookOpen, Mail,
+  Users, FileText, MessageSquare, GraduationCap, ChevronRight, Mail,
   Check, X, Plus, Trash2, Edit, Star, UserCheck, Link as LinkIcon, Save,
   Hash, Megaphone, Calendar, FolderOpen, Shield, Bell, Briefcase,
   Settings, Upload, Download, Eye, Image, Video, File, HardDrive
@@ -36,15 +35,6 @@ interface DSSApplication {
   skill_interest?: string;
   city?: string;
   motivation?: string;
-}
-
-interface Cohort {
-  id: string;
-  name: string;
-  year: number;
-  description?: string;
-  banner_url?: string;
-  created_at: string;
 }
 
 interface Channel {
@@ -86,19 +76,6 @@ interface Profile {
   user_roles?: { role: string }[];
 }
 
-interface Student {
-  id: string;
-  full_name: string;
-  email: string;
-  skill?: string;
-  district: string;
-  cohort_id?: string;
-  avatar_url?: string;
-  approved: boolean;
-  created_at?: string;
-  cohorts?: { name: string };
-}
-
 interface ContactMessage {
   id: string;
   subject: string;
@@ -119,16 +96,7 @@ interface MarketApplication {
   created_at?: string;
 }
 
-interface TeamMember {
-  id: string;
-  name: string;
-  role: string;
-  bio: string | null;
-  image_url: string | null;
-  created_at: string;
-}
-
-type Tab = "overview" | "cohorts" | "students" | "blog" | "messages" | "testimonies" | "applications" | "community" | "settings" | "team";
+type Tab = "overview" | "blog" | "messages" | "testimonies" | "applications" | "community" | "settings";
 
 export default function AdminDashboard() {
   const { user, loading } = useAuth();
@@ -138,13 +106,10 @@ export default function AdminDashboard() {
 
   const tabs: { id: Tab; label: string; icon: React.ElementType }[] = [
     { id: "overview", label: "Overview", icon: Users },
-    { id: "cohorts", label: "Cohorts", icon: BookOpen },
-    { id: "students", label: "Students", icon: Users },
     { id: "blog", label: "Blog", icon: FileText },
     { id: "messages", label: "Contacts", icon: Mail },
     { id: "testimonies", label: "Testimonials", icon: Star },
     { id: "applications", label: "Applications", icon: FileText },
-    { id: "team", label: "Team", icon: Users },
     { id: "community", label: "Community", icon: UserCheck },
     { id: "settings", label: "Settings", icon: LinkIcon },
   ];
@@ -168,13 +133,10 @@ export default function AdminDashboard() {
         </div>
 
         {activeTab === "overview" && <OverviewPanel />}
-        {activeTab === "cohorts" && <CohortsPanel />}
-        {activeTab === "students" && <StudentsPanel />}
         {activeTab === "blog" && <BlogPanel />}
         {activeTab === "messages" && <MessagesPanel />}
         {activeTab === "testimonies" && <TestimoniesPanel />}
         {activeTab === "applications" && <ApplicationsPanel />}
-        {activeTab === "team" && <TeamPanel />}
         {activeTab === "community" && <CommunityPanel />}
         {activeTab === "settings" && <SettingsPanel />}
       </Section>
@@ -182,16 +144,18 @@ export default function AdminDashboard() {
   );
 }
 
+// STUDENTS & COHORTS ARE MANAGED STRICTLY VIA SUPABASE.
+// DO NOT REINTRODUCE ADMIN UI OR LOGIC FOR THEM.
+
 // ===== OVERVIEW =====
 function OverviewPanel() {
   const { data, isLoading } = useQuery({
     queryKey: ['adminOverviewStats'],
     queryFn: async () => {
       const source = await getTestimonialSource();
-      const [apps, communityMembers, cohorts, messages, blogs, testimonies, pending, channels, events, resources] = await Promise.all([
+      const [apps, communityMembers, messages, blogs, testimonies, pending, channels, events, resources] = await Promise.all([
         supabase.from("dss_applications").select("id", { count: "exact", head: true }),
         supabase.from("community_members").select("id", { count: "exact", head: true }),
-        supabase.from("cohorts").select("id", { count: "exact", head: true }),
         supabase.from("contact_messages").select("id", { count: "exact", head: true }),
         supabase.from("blog_posts").select("id", { count: "exact", head: true }),
         supabase.from(source).select("id", { count: "exact", head: true }),
@@ -203,8 +167,7 @@ function OverviewPanel() {
 
       return {
         applications: apps.count ?? 0,
-        students: communityMembers.count ?? 0,
-        cohorts: cohorts.count ?? 0,
+        communityMembers: communityMembers.count ?? 0,
         messages: messages.count ?? 0,
         blogs: blogs.count ?? 0,
         testimonies: testimonies.count ?? 0,
@@ -223,7 +186,7 @@ function OverviewPanel() {
   if (isLoading) {
     return (
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
-        {Array.from({ length: 10 }).map((_, i) => (
+        {Array.from({ length: 9 }).map((_, i) => (
           <div key={i} className="bg-card rounded-xl p-6 border border-border animate-pulse">
             <div className="flex items-center gap-3 mb-2">
               <div className="h-10 w-10 rounded-lg bg-primary/10"></div>
@@ -238,8 +201,7 @@ function OverviewPanel() {
 
   const cards = [
     { label: "DSS Applications", value: stats.applications ?? 0, icon: GraduationCap },
-    { label: "Students", value: stats.students ?? 0, icon: Users },
-    { label: "Cohorts", value: stats.cohorts ?? 0, icon: BookOpen },
+    { label: "Community Members", value: stats.communityMembers ?? 0, icon: Users },
     { label: "Channels", value: stats.channels ?? 0, icon: Hash },
     { label: "Events", value: stats.events ?? 0, icon: Calendar },
     { label: "Resources", value: stats.resources ?? 0, icon: FolderOpen },
@@ -262,487 +224,6 @@ function OverviewPanel() {
           <div className="font-display text-3xl font-bold">{card.value}</div>
         </div>
       ))}
-    </div>
-  );
-}
-
-// ===== COHORTS =====
-function CohortsPanel() {
-  const [cohorts, setCohorts] = useState<Cohort[]>([]);
-  const [year, setYear] = useState(new Date().getFullYear());
-  const [district, setDistrict] = useState("");
-  const [desc, setDesc] = useState("");
-  const [imageFile, setImageFile] = useState<File | null>(null);
-  const [uploading, setUploading] = useState(false);
-  const [editingCohort, setEditingCohort] = useState<Cohort | null>(null);
-  const { toast } = useToast();
-  const navigate = useNavigate();
-
-  const fetchCohorts = useCallback(async () => {
-    const { data } = await supabase.from("cohorts").select("id, name, year, description, banner_url, created_at").order("year", { ascending: false });
-    if (data) setCohorts(data as Cohort[]);
-  }, []);
-
-  useEffect(() => { fetchCohorts(); }, [fetchCohorts]);
-
-  const generateCohortName = (year: number, district: string) => {
-    return `Cohort ${year} - ${district}`;
-  };
-
-  const addCohort = async () => {
-    if (!district || !year) {
-      toast({ title: "Error", description: "Please provide district and year.", variant: "destructive" });
-      return;
-    }
-
-    setUploading(true);
-    const cohortName = generateCohortName(year, district);
-    let imageUrl = "";
-
-    if (imageFile) {
-      try {
-        imageUrl = await FileUploadService.uploadFile(imageFile, "community-media/cohorts/");
-      } catch (error) {
-        toast({ title: "Upload Error", description: "Failed to upload image.", variant: "destructive" });
-        setUploading(false);
-        return;
-      }
-    }
-
-    const cohortData: Partial<Cohort> = {
-      name: cohortName,
-      year,
-      description: desc,
-      banner_url: imageUrl || undefined,
-    };
-
-    try {
-      const { data, error } = await supabase.from("cohorts").insert(cohortData).select().single();
-      if (error) throw error;
-      if (data) {
-        setCohorts([data, ...cohorts]);
-        setDistrict("");
-        setDesc("");
-        setImageFile(null);
-        toast({ title: "Cohort created successfully" });
-      }
-    } catch (error) {
-      const message = error instanceof Error ? error.message : String(error);
-      toast({ title: "Error", description: message, variant: "destructive" });
-    }
-    setUploading(false);
-  };
-
-  const updateCohort = async () => {
-    if (!editingCohort || !district || !year) return;
-
-    setUploading(true);
-    const cohortName = generateCohortName(year, district);
-    let imageUrl = editingCohort.image_url || "";
-
-    if (imageFile) {
-      try {
-        imageUrl = await FileUploadService.uploadFile(imageFile, "community-media/cohorts/");
-      } catch (error) {
-        toast({ title: "Upload Error", description: "Failed to upload image.", variant: "destructive" });
-        setUploading(false);
-        return;
-      }
-    }
-
-    const updateData: Partial<Cohort> = {
-      name: cohortName,
-      year,
-      description: desc,
-      banner_url: imageUrl || undefined,
-    };
-
-    try {
-      const { error } = await supabase.from("cohorts").update(updateData).eq("id", editingCohort.id);
-      if (error) throw error;
-      toast({ title: "Cohort updated successfully" });
-      setEditingCohort(null);
-      setDistrict("");
-      setDesc("");
-      setImageFile(null);
-      fetchCohorts();
-    } catch (error) {
-      const message = error instanceof Error ? error.message : String(error);
-      toast({ title: "Error", description: message, variant: "destructive" });
-    }
-    setUploading(false);
-  };
-
-  const deleteCohort = async (id: string) => {
-    if (!confirm("Are you sure you want to delete this cohort?")) return;
-    await supabase.from("cohorts").delete().eq("id", id);
-    setCohorts(cohorts.filter(c => c.id !== id));
-    toast({ title: "Cohort deleted" });
-  };
-
-  const startEdit = (cohort: Cohort) => {
-    setEditingCohort(cohort);
-    // Extract district from name (format: "Cohort 2024 - District Name")
-    const nameParts = cohort.name.split(" - ");
-    if (nameParts.length >= 2) {
-      setDistrict(nameParts[1]);
-    }
-    setYear(cohort.year);
-    setDesc(cohort.description || "");
-  };
-
-  const cancelEdit = () => {
-    setEditingCohort(null);
-    setDistrict("");
-    setYear(new Date().getFullYear());
-    setDesc("");
-    setImageFile(null);
-  };
-
-  return (
-    <div className="space-y-6">
-      <div className="bg-card rounded-xl p-6 border border-border space-y-4">
-        <h3 className="font-semibold">{editingCohort ? "Edit Cohort" : "Add New Cohort"}</h3>
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          <div>
-            <label className="text-sm font-medium">District</label>
-            <Input
-              placeholder="e.g., Nairobi, Kisumu, Mombasa"
-              value={district}
-              onChange={e => setDistrict(e.target.value)}
-            />
-          </div>
-          <div>
-            <label className="text-sm font-medium">Year</label>
-            <Input
-              type="number"
-              placeholder="Year"
-              value={year}
-              onChange={e => setYear(parseInt(e.target.value))}
-            />
-          </div>
-        </div>
-        <div>
-          <label className="text-sm font-medium">Description</label>
-          <Textarea
-            placeholder="Cohort description..."
-            value={desc}
-            onChange={e => setDesc(e.target.value)}
-            rows={3}
-          />
-        </div>
-        <div>
-          <label className="text-sm font-medium">Cohort Image (optional)</label>
-          <Input
-            type="file"
-            accept="image/*"
-            onChange={e => setImageFile(e.target.files?.[0] || null)}
-          />
-        </div>
-        <div className="flex gap-2">
-          <Button
-            onClick={editingCohort ? updateCohort : addCohort}
-            size="sm"
-            disabled={uploading}
-          >
-            {uploading ? "Uploading..." : editingCohort ? "Update Cohort" : "Add Cohort"}
-          </Button>
-          {editingCohort && (
-            <Button onClick={cancelEdit} variant="outline" size="sm">
-              Cancel
-            </Button>
-          )}
-        </div>
-        {!editingCohort && (
-          <p className="text-xs text-muted-foreground">
-            Cohort name will be auto-generated as "Cohort [Year] - [District]"
-          </p>
-        )}
-      </div>
-
-      <div className="space-y-4">
-        {cohorts.map(c => (
-          <div key={c.id} className="bg-card rounded-xl p-4 border border-border cursor-pointer hover:bg-accent/50 transition-colors" onClick={() => navigate(`/cohort/${c.id}`)}>
-            <div className="flex items-start justify-between gap-4">
-              <div className="flex-1">
-                <div className="flex items-center gap-3 mb-2">
-                  {c.banner_url && (
-                    <img src={c.banner_url} alt={c.name} className="w-12 h-12 rounded-lg object-cover" />
-                  )}
-                  <div>
-                    <h4 className="font-semibold">{c.name}</h4>
-                    <p className="text-sm text-muted-foreground">{c.description}</p>
-                  </div>
-                </div>
-                <p className="text-xs text-muted-foreground">
-                  Created: {new Date(c.created_at).toLocaleDateString()}
-                </p>
-              </div>
-              <div className="flex gap-2" onClick={(e) => e.stopPropagation()}>
-                <Button size="sm" variant="outline" onClick={() => startEdit(c)}>
-                  <Edit className="h-4 w-4" />
-                </Button>
-                <Button size="sm" variant="ghost" onClick={() => deleteCohort(c.id)}>
-                  <Trash2 className="h-4 w-4 text-destructive" />
-                </Button>
-              </div>
-            </div>
-          </div>
-        ))}
-        {cohorts.length === 0 && (
-          <p className="text-muted-foreground text-center py-8">No cohorts created yet.</p>
-        )}
-      </div>
-    </div>
-  );
-}
-
-// ===== STUDENTS =====
-function StudentsPanel() {
-  const [students, setStudents] = useState<Student[]>([]);
-  const [cohorts, setCohorts] = useState<Cohort[]>([]);
-  const [fullName, setFullName] = useState("");
-  const [email, setEmail] = useState("");
-  const [skill, setSkill] = useState("");
-  const [district, setDistrict] = useState("");
-  const [cohortId, setCohortId] = useState("");
-  const [avatarFile, setAvatarFile] = useState<File | null>(null);
-  const [uploading, setUploading] = useState(false);
-  const [editingStudent, setEditingStudent] = useState<Student | null>(null);
-  const { toast } = useToast();
-
-  const fetchStudents = useCallback(async () => {
-    const { data } = await supabase.from("community_members").select("*, cohorts(name)").order("created_at", { ascending: false });
-    if (data) setStudents(data as Student[]);
-  }, []);
-
-  const fetchCohorts = useCallback(async () => {
-    const { data } = await supabase.from("cohorts").select("*");
-    if (data) setCohorts(data as Cohort[]);
-  }, []);
-
-  useEffect(() => {
-    fetchStudents();
-    fetchCohorts();
-  }, [fetchStudents, fetchCohorts]);
-
-  const addStudent = async () => {
-    if (!fullName || !email || !district) {
-      toast({ title: "Error", description: "Full name, email and district are required.", variant: "destructive" });
-      return;
-    }
-
-    setUploading(true);
-    let avatarUrl = "";
-
-    if (avatarFile) {
-      try {
-        avatarUrl = await FileUploadService.uploadFile(avatarFile, "community-media/avatars/");
-      } catch (error) {
-        toast({ title: "Upload Error", description: "Failed to upload avatar.", variant: "destructive" });
-        setUploading(false);
-        return;
-      }
-    }
-
-    const studentData: Partial<Student> = {
-      full_name: fullName,
-      email,
-      skill: skill || null,
-      district,
-      cohort_id: cohortId || null,
-      avatar_url: avatarUrl || null,
-      approved: true,
-    };
-
-    try {
-      const { data, error } = await supabase.from("community_members").insert(studentData).select("*, cohorts(name)").single();
-      if (error) throw error;
-      if (data) {
-        setStudents([data, ...students]);
-        resetForm();
-        toast({ title: "Student added successfully" });
-      }
-    } catch (error) {
-      const message = error instanceof Error ? error.message : String(error);
-      toast({ title: "Error", description: message, variant: "destructive" });
-    }
-    setUploading(false);
-  };
-
-  const updateStudent = async () => {
-    if (!editingStudent || !fullName || !email || !district) return;
-
-    setUploading(true);
-    let avatarUrl = editingStudent.avatar_url || "";
-
-    if (avatarFile) {
-      try {
-        avatarUrl = await FileUploadService.uploadFile(avatarFile, "community-media/avatars/");
-      } catch (error) {
-        toast({ title: "Upload Error", description: "Failed to upload avatar.", variant: "destructive" });
-        setUploading(false);
-        return;
-      }
-    }
-
-    const updateData = {
-      full_name: fullName,
-      email,
-      skill: skill || null,
-      district,
-      cohort_id: cohortId || null,
-      avatar_url: avatarUrl || null,
-    };
-
-    try {
-      const { error } = await supabase.from("community_members").update(updateData).eq("id", editingStudent.id);
-      if (error) throw error;
-      toast({ title: "Student updated successfully" });
-      setEditingStudent(null);
-      resetForm();
-      fetchStudents();
-    } catch (error) {
-      const message = error instanceof Error ? error.message : String(error);
-      toast({ title: "Error", description: message, variant: "destructive" });
-    }
-    setUploading(false);
-  };
-
-  const deleteStudent = async (id: string) => {
-    if (!confirm("Are you sure you want to delete this student?")) return;
-    await supabase.from("community_members").delete().eq("id", id);
-    setStudents(students.filter(s => s.id !== id));
-    toast({ title: "Student deleted" });
-  };
-
-  const startEdit = (student: Student) => {
-    setEditingStudent(student);
-    setFullName(student.full_name || "");
-    setEmail(student.email || "");
-    setSkill(student.skill || "");
-    setDistrict(student.district || "");
-    setCohortId(student.cohort_id || "");
-  };
-
-  const resetForm = () => {
-    setFullName("");
-    setEmail("");
-    setSkill("");
-    setDistrict("");
-    setCohortId("");
-    setAvatarFile(null);
-  };
-
-  const cancelEdit = () => {
-    setEditingStudent(null);
-    resetForm();
-  };
-
-  return (
-    <div className="space-y-6">
-      <div className="bg-card rounded-xl p-6 border border-border space-y-4">
-        <h3 className="font-semibold">{editingStudent ? "Edit Student" : "Add New Student"}</h3>
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          <Input
-            placeholder="Full Name *"
-            value={fullName || ""}
-            onChange={e => setFullName(e.target.value)}
-            required
-          />
-          <Input
-            type="email"
-            placeholder="Email *"
-            value={email || ""}
-            onChange={e => setEmail(e.target.value)}
-            required
-          />
-          <Input
-            placeholder="Skill/Interest"
-            value={skill || ""}
-            onChange={e => setSkill(e.target.value)}
-          />
-          <Input
-            placeholder="District *"
-            value={district || ""}
-            onChange={e => setDistrict(e.target.value)}
-            required
-          />
-          <select
-            className="flex h-10 rounded-md border border-input bg-background px-3 py-2 text-sm"
-            value={cohortId || ""}
-            onChange={e => setCohortId(e.target.value)}
-          >
-            <option value="">Select Cohort (optional)</option>
-            {cohorts.map(c => (
-              <option key={c.id} value={c.id}>{c.name}</option>
-            ))}
-          </select>
-        </div>
-        <div>
-          <label className="text-sm font-medium">Avatar Image (optional)</label>
-          <Input
-            type="file"
-            accept="image/*"
-            onChange={e => setAvatarFile(e.target.files?.[0] || null)}
-          />
-        </div>
-        <div className="flex gap-2">
-          <Button
-            onClick={editingStudent ? updateStudent : addStudent}
-            size="sm"
-            disabled={uploading}
-          >
-            {uploading ? "Uploading..." : editingStudent ? "Update Student" : "Add Student"}
-          </Button>
-          {editingStudent && (
-            <Button onClick={cancelEdit} variant="outline" size="sm">
-              Cancel
-            </Button>
-          )}
-        </div>
-        <p className="text-xs text-muted-foreground">
-          * Required fields. Avatars are uploaded to the community-media/avatars/ storage bucket.
-        </p>
-      </div>
-
-      <div className="space-y-4">
-        {students.map(s => (
-          <div key={s.id} className="bg-card rounded-xl p-4 border border-border">
-            <div className="flex items-start justify-between gap-4">
-              <div className="flex items-start gap-4 flex-1">
-                {s.avatar_url && (
-                  <img src={s.avatar_url} alt={s.full_name} className="w-16 h-16 rounded-full object-cover" />
-                )}
-                <div className="flex-1">
-                  <div className="flex items-center gap-2 mb-1">
-                    <h4 className="font-semibold">{s.full_name}</h4>
-                    {s.cohorts?.name && (
-                      <span className="text-xs bg-primary/10 text-primary px-2 py-1 rounded">
-                        {s.cohorts.name}
-                      </span>
-                    )}
-                  </div>
-                  <p className="text-sm text-muted-foreground mb-1">{s.email}</p>
-                  <p className="text-sm text-muted-foreground mb-1">{s.district}</p>
-                  {s.skill && <p className="text-sm text-muted-foreground">Skill: {s.skill}</p>}
-                </div>
-              </div>
-              <div className="flex gap-2">
-                <Button size="sm" variant="outline" onClick={() => startEdit(s)}>
-                  <Edit className="h-4 w-4" />
-                </Button>
-                <Button size="sm" variant="ghost" onClick={() => deleteStudent(s.id)}>
-                  <Trash2 className="h-4 w-4 text-destructive" />
-                </Button>
-              </div>
-            </div>
-          </div>
-        ))}
-        {students.length === 0 && (
-          <p className="text-muted-foreground text-center py-8">No students added yet.</p>
-        )}
-      </div>
     </div>
   );
 }
@@ -1214,236 +695,6 @@ function SettingsPanel() {
         <p className="text-sm text-muted-foreground">Set the external application form URL. This is where applicants will be redirected to apply and pay the fee.</p>
         <Input placeholder="https://forms.google.com/..." value={applicationLink} onChange={e => setApplicationLink(e.target.value)} />
         <Button onClick={saveLink} size="sm"><Save className="h-4 w-4 mr-1" /> {saved ? "Saved!" : "Save Link"}</Button>
-      </div>
-    </div>
-  );
-}
-
-// ===== TEAM MANAGEMENT =====
-function TeamPanel() {
-  const [teamMembers, setTeamMembers] = useState<TeamMember[]>([]);
-  const [editingMember, setEditingMember] = useState<TeamMember | null>(null);
-  const [name, setName] = useState("");
-  const [role, setRole] = useState("");
-  const [bio, setBio] = useState("");
-  const [imageFile, setImageFile] = useState<File | null>(null);
-  const [uploading, setUploading] = useState(false);
-  const { toast } = useToast();
-
-  const fetchTeamMembers = useCallback(async () => {
-    const { data, error } = await supabase
-      .from("team_members")
-      .select("*")
-      .order("created_at", { ascending: true });
-
-    if (error) {
-      toast({ title: "Error", description: "Failed to load team members", variant: "destructive" });
-      return;
-    }
-
-    setTeamMembers(data as TeamMember[]);
-  }, [toast]);
-
-  useEffect(() => {
-    fetchTeamMembers();
-  }, [fetchTeamMembers]);
-
-  const handleSubmit = async () => {
-    if (!name || !role) {
-      toast({ title: "Error", description: "Name and role are required", variant: "destructive" });
-      return;
-    }
-
-    if (!editingMember && !imageFile) {
-      toast({ title: "Error", description: "Image is required for new team members", variant: "destructive" });
-      return;
-    }
-
-    setUploading(true);
-    let imageUrl = editingMember?.image_url || "";
-
-    // Upload image if provided
-    if (imageFile) {
-      try {
-        imageUrl = await FileUploadService.uploadTeamMemberImage(imageFile);
-      } catch (error) {
-        const message = error instanceof Error ? error.message : "Failed to upload image";
-        toast({ title: "Upload Error", description: message, variant: "destructive" });
-        setUploading(false);
-        return;
-      }
-    }
-
-    const memberData = {
-      name,
-      role,
-      bio: bio || null,
-      image_url: imageUrl || null,
-    };
-
-    try {
-      if (editingMember) {
-        const { error } = await supabase
-          .from("team_members")
-          .update(memberData)
-          .eq("id", editingMember.id);
-
-        if (error) throw error;
-        toast({ title: "Success", description: "Team member updated successfully" });
-      } else {
-        const { error } = await supabase
-          .from("team_members")
-          .insert(memberData);
-
-        if (error) throw error;
-        toast({ title: "Success", description: "Team member added successfully" });
-      }
-
-      setName("");
-      setRole("");
-      setBio("");
-      setImageFile(null);
-      setEditingMember(null);
-      fetchTeamMembers();
-    } catch (error) {
-      const message = error instanceof Error ? error.message : String(error);
-      toast({ title: "Error", description: message, variant: "destructive" });
-    }
-    setUploading(false);
-  };
-
-  const deleteMember = async (id: string) => {
-    if (!confirm("Are you sure you want to delete this team member?")) return;
-
-    try {
-      const { error } = await supabase
-        .from("team_members")
-        .delete()
-        .eq("id", id);
-
-      if (error) throw error;
-      toast({ title: "Team member deleted" });
-      fetchTeamMembers();
-    } catch (error) {
-      const message = error instanceof Error ? error.message : String(error);
-      toast({ title: "Error", description: message, variant: "destructive" });
-    }
-  };
-
-  const startEdit = (member: TeamMember) => {
-    setEditingMember(member);
-    setName(member.name);
-    setRole(member.role);
-    setBio(member.bio || "");
-  };
-
-  const cancelEdit = () => {
-    setEditingMember(null);
-    setName("");
-    setRole("");
-    setBio("");
-    setImageFile(null);
-  };
-
-  return (
-    <div className="space-y-6">
-      {/* Add/Edit Form */}
-      <div className="bg-card rounded-xl p-6 border border-border space-y-4">
-        <h3 className="font-semibold">{editingMember ? "Edit Team Member" : "Add Team Member"}</h3>
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          <div>
-            <label className="text-sm font-medium">Name *</label>
-            <Input
-              placeholder="Full name"
-              value={name}
-              onChange={(e) => setName(e.target.value)}
-            />
-          </div>
-          <div>
-            <label className="text-sm font-medium">Role *</label>
-            <Input
-              placeholder="e.g., Program Manager"
-              value={role}
-              onChange={(e) => setRole(e.target.value)}
-            />
-          </div>
-        </div>
-        <div>
-          <label className="text-sm font-medium">Bio</label>
-          <Textarea
-            placeholder="Brief description of the team member's role and background..."
-            value={bio}
-            onChange={(e) => setBio(e.target.value)}
-            rows={3}
-          />
-        </div>
-        <div>
-          <label className="text-sm font-medium">Profile Image</label>
-          <Input
-            type="file"
-            accept="image/*"
-            onChange={(e) => setImageFile(e.target.files?.[0] || null)}
-            className="file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-primary file:text-primary-foreground hover:file:bg-primary/90"
-          />
-          {editingMember?.image_url && (
-            <p className="text-xs text-muted-foreground mt-1">
-              Leave empty to keep current image
-            </p>
-          )}
-        </div>
-        <div className="flex gap-2">
-          <Button onClick={handleSubmit} disabled={uploading} size="sm">
-            {uploading ? (
-              <Loader2 className="h-4 w-4 mr-1 animate-spin" />
-            ) : (
-              <Save className="h-4 w-4 mr-1" />
-            )}
-            {editingMember ? "Update" : "Add"} Member
-          </Button>
-          {editingMember && (
-            <Button onClick={cancelEdit} variant="outline" size="sm">
-              Cancel
-            </Button>
-          )}
-        </div>
-      </div>
-
-      {/* Team Members List */}
-      <div className="space-y-4">
-        <h3 className="font-semibold">Current Team Members</h3>
-        {teamMembers.map((member) => (
-          <div key={member.id} className="bg-card rounded-xl p-4 border border-border">
-            <div className="flex items-start justify-between gap-4">
-              <div className="flex items-start gap-4 flex-1">
-                {member.image_url && (
-                  <img
-                    src={member.image_url}
-                    alt={member.name}
-                    className="w-16 h-16 rounded-full object-cover"
-                  />
-                )}
-                <div className="flex-1">
-                  <h4 className="font-semibold">{member.name}</h4>
-                  <p className="text-primary font-medium">{member.role}</p>
-                  {member.bio && (
-                    <p className="text-sm text-muted-foreground mt-1">{member.bio}</p>
-                  )}
-                </div>
-              </div>
-              <div className="flex gap-2">
-                <Button size="sm" variant="outline" onClick={() => startEdit(member)}>
-                  <Edit className="h-4 w-4" />
-                </Button>
-                <Button size="sm" variant="ghost" onClick={() => deleteMember(member.id)}>
-                  <Trash2 className="h-4 w-4 text-destructive" />
-                </Button>
-              </div>
-            </div>
-          </div>
-        ))}
-        {teamMembers.length === 0 && (
-          <p className="text-muted-foreground text-center py-8">No team members added yet.</p>
-        )}
       </div>
     </div>
   );
