@@ -1,4 +1,4 @@
-﻿import { useEffect, useState } from "react";
+﻿import { useCallback, useEffect, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
@@ -29,7 +29,7 @@ export function CommentSection({
   const [newComment, setNewComment] = useState("");
   const [loading, setLoading] = useState(false);
 
-  const fetchComments = async () => {
+  const fetchComments = useCallback(async () => {
     setLoading(true);
     const { data, error } = await supabase
       .from("community_comments")
@@ -45,12 +45,12 @@ export function CommentSection({
       setComments(normalized);
     }
     setLoading(false);
-  };
+  }, [postId]);
 
   useEffect(() => {
     if (!postId) return;
     fetchComments();
-  }, [postId]);
+  }, [postId, fetchComments]);
 
   return (
     <div className="space-y-3">

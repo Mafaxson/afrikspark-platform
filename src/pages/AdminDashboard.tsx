@@ -119,7 +119,16 @@ interface MarketApplication {
   created_at?: string;
 }
 
-type Tab = "overview" | "cohorts" | "students" | "blog" | "messages" | "testimonies" | "community" | "settings";
+interface TeamMember {
+  id: string;
+  name: string;
+  role: string;
+  bio: string | null;
+  image_url: string | null;
+  created_at: string;
+}
+
+type Tab = "overview" | "cohorts" | "students" | "blog" | "messages" | "testimonies" | "applications" | "community" | "settings" | "team";
 
 export default function AdminDashboard() {
   const { user, loading } = useAuth();
@@ -135,6 +144,7 @@ export default function AdminDashboard() {
     { id: "messages", label: "Contacts", icon: Mail },
     { id: "testimonies", label: "Testimonials", icon: Star },
     { id: "applications", label: "Applications", icon: FileText },
+    { id: "team", label: "Team", icon: Users },
     { id: "community", label: "Community", icon: UserCheck },
     { id: "settings", label: "Settings", icon: LinkIcon },
   ];
@@ -164,6 +174,7 @@ export default function AdminDashboard() {
         {activeTab === "messages" && <MessagesPanel />}
         {activeTab === "testimonies" && <TestimoniesPanel />}
         {activeTab === "applications" && <ApplicationsPanel />}
+        {activeTab === "team" && <TeamPanel />}
         {activeTab === "community" && <CommunityPanel />}
         {activeTab === "settings" && <SettingsPanel />}
       </Section>
@@ -1203,6 +1214,236 @@ function SettingsPanel() {
         <p className="text-sm text-muted-foreground">Set the external application form URL. This is where applicants will be redirected to apply and pay the fee.</p>
         <Input placeholder="https://forms.google.com/..." value={applicationLink} onChange={e => setApplicationLink(e.target.value)} />
         <Button onClick={saveLink} size="sm"><Save className="h-4 w-4 mr-1" /> {saved ? "Saved!" : "Save Link"}</Button>
+      </div>
+    </div>
+  );
+}
+
+// ===== TEAM MANAGEMENT =====
+function TeamPanel() {
+  const [teamMembers, setTeamMembers] = useState<TeamMember[]>([]);
+  const [editingMember, setEditingMember] = useState<TeamMember | null>(null);
+  const [name, setName] = useState("");
+  const [role, setRole] = useState("");
+  const [bio, setBio] = useState("");
+  const [imageFile, setImageFile] = useState<File | null>(null);
+  const [uploading, setUploading] = useState(false);
+  const { toast } = useToast();
+
+  const fetchTeamMembers = useCallback(async () => {
+    const { data, error } = await supabase
+      .from("team_members")
+      .select("*")
+      .order("created_at", { ascending: true });
+
+    if (error) {
+      toast({ title: "Error", description: "Failed to load team members", variant: "destructive" });
+      return;
+    }
+
+    setTeamMembers(data as TeamMember[]);
+  }, [toast]);
+
+  useEffect(() => {
+    fetchTeamMembers();
+  }, [fetchTeamMembers]);
+
+  const handleSubmit = async () => {
+    if (!name || !role) {
+      toast({ title: "Error", description: "Name and role are required", variant: "destructive" });
+      return;
+    }
+
+    if (!editingMember && !imageFile) {
+      toast({ title: "Error", description: "Image is required for new team members", variant: "destructive" });
+      return;
+    }
+
+    setUploading(true);
+    let imageUrl = editingMember?.image_url || "";
+
+    // Upload image if provided
+    if (imageFile) {
+      try {
+        imageUrl = await FileUploadService.uploadTeamMemberImage(imageFile);
+      } catch (error) {
+        const message = error instanceof Error ? error.message : "Failed to upload image";
+        toast({ title: "Upload Error", description: message, variant: "destructive" });
+        setUploading(false);
+        return;
+      }
+    }
+
+    const memberData = {
+      name,
+      role,
+      bio: bio || null,
+      image_url: imageUrl || null,
+    };
+
+    try {
+      if (editingMember) {
+        const { error } = await supabase
+          .from("team_members")
+          .update(memberData)
+          .eq("id", editingMember.id);
+
+        if (error) throw error;
+        toast({ title: "Success", description: "Team member updated successfully" });
+      } else {
+        const { error } = await supabase
+          .from("team_members")
+          .insert(memberData);
+
+        if (error) throw error;
+        toast({ title: "Success", description: "Team member added successfully" });
+      }
+
+      setName("");
+      setRole("");
+      setBio("");
+      setImageFile(null);
+      setEditingMember(null);
+      fetchTeamMembers();
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      toast({ title: "Error", description: message, variant: "destructive" });
+    }
+    setUploading(false);
+  };
+
+  const deleteMember = async (id: string) => {
+    if (!confirm("Are you sure you want to delete this team member?")) return;
+
+    try {
+      const { error } = await supabase
+        .from("team_members")
+        .delete()
+        .eq("id", id);
+
+      if (error) throw error;
+      toast({ title: "Team member deleted" });
+      fetchTeamMembers();
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      toast({ title: "Error", description: message, variant: "destructive" });
+    }
+  };
+
+  const startEdit = (member: TeamMember) => {
+    setEditingMember(member);
+    setName(member.name);
+    setRole(member.role);
+    setBio(member.bio || "");
+  };
+
+  const cancelEdit = () => {
+    setEditingMember(null);
+    setName("");
+    setRole("");
+    setBio("");
+    setImageFile(null);
+  };
+
+  return (
+    <div className="space-y-6">
+      {/* Add/Edit Form */}
+      <div className="bg-card rounded-xl p-6 border border-border space-y-4">
+        <h3 className="font-semibold">{editingMember ? "Edit Team Member" : "Add Team Member"}</h3>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div>
+            <label className="text-sm font-medium">Name *</label>
+            <Input
+              placeholder="Full name"
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+            />
+          </div>
+          <div>
+            <label className="text-sm font-medium">Role *</label>
+            <Input
+              placeholder="e.g., Program Manager"
+              value={role}
+              onChange={(e) => setRole(e.target.value)}
+            />
+          </div>
+        </div>
+        <div>
+          <label className="text-sm font-medium">Bio</label>
+          <Textarea
+            placeholder="Brief description of the team member's role and background..."
+            value={bio}
+            onChange={(e) => setBio(e.target.value)}
+            rows={3}
+          />
+        </div>
+        <div>
+          <label className="text-sm font-medium">Profile Image</label>
+          <Input
+            type="file"
+            accept="image/*"
+            onChange={(e) => setImageFile(e.target.files?.[0] || null)}
+            className="file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-primary file:text-primary-foreground hover:file:bg-primary/90"
+          />
+          {editingMember?.image_url && (
+            <p className="text-xs text-muted-foreground mt-1">
+              Leave empty to keep current image
+            </p>
+          )}
+        </div>
+        <div className="flex gap-2">
+          <Button onClick={handleSubmit} disabled={uploading} size="sm">
+            {uploading ? (
+              <Loader2 className="h-4 w-4 mr-1 animate-spin" />
+            ) : (
+              <Save className="h-4 w-4 mr-1" />
+            )}
+            {editingMember ? "Update" : "Add"} Member
+          </Button>
+          {editingMember && (
+            <Button onClick={cancelEdit} variant="outline" size="sm">
+              Cancel
+            </Button>
+          )}
+        </div>
+      </div>
+
+      {/* Team Members List */}
+      <div className="space-y-4">
+        <h3 className="font-semibold">Current Team Members</h3>
+        {teamMembers.map((member) => (
+          <div key={member.id} className="bg-card rounded-xl p-4 border border-border">
+            <div className="flex items-start justify-between gap-4">
+              <div className="flex items-start gap-4 flex-1">
+                {member.image_url && (
+                  <img
+                    src={member.image_url}
+                    alt={member.name}
+                    className="w-16 h-16 rounded-full object-cover"
+                  />
+                )}
+                <div className="flex-1">
+                  <h4 className="font-semibold">{member.name}</h4>
+                  <p className="text-primary font-medium">{member.role}</p>
+                  {member.bio && (
+                    <p className="text-sm text-muted-foreground mt-1">{member.bio}</p>
+                  )}
+                </div>
+              </div>
+              <div className="flex gap-2">
+                <Button size="sm" variant="outline" onClick={() => startEdit(member)}>
+                  <Edit className="h-4 w-4" />
+                </Button>
+                <Button size="sm" variant="ghost" onClick={() => deleteMember(member.id)}>
+                  <Trash2 className="h-4 w-4 text-destructive" />
+                </Button>
+              </div>
+            </div>
+          </div>
+        ))}
+        {teamMembers.length === 0 && (
+          <p className="text-muted-foreground text-center py-8">No team members added yet.</p>
+        )}
       </div>
     </div>
   );

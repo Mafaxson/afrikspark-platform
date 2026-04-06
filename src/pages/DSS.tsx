@@ -1,5 +1,4 @@
-﻿/// <reference types="react" />
-import { useState, useEffect, useRef } from "react";
+﻿import { useState, useEffect, useRef } from "react";
 import { Layout } from "@/components/Layout";
 import { Section, SectionHeader, AnimateOnScroll } from "@/components/SectionComponents";
 import { Button } from "@/components/ui/button";

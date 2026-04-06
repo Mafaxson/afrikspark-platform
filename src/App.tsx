@@ -9,6 +9,8 @@ import ProtectedAdminRoute from "@/components/ProtectedAdminRoute";
 import { lazy, Suspense } from "react";
 import Home from "./pages/Home";
 import About from "./pages/About";
+import Founder from "./pages/Founder";
+import Team from "./pages/Team";
 import Services from "./pages/Services";
 import Projects from "./pages/Projects";
 import Partners from "./pages/Partners";
@@ -50,6 +52,8 @@ const App = () => (
             <Routes>
               <Route path="/" element={<Home />} />
               <Route path="/about" element={<About />} />
+              <Route path="/about/founder" element={<Founder />} />
+              <Route path="/about/team" element={<Team />} />
               <Route path="/services" element={<Services />} />
               <Route path="/dss" element={<Suspense fallback={<div className="min-h-screen flex items-center justify-center"><div className="animate-spin rounded-full h-32 w-32 border-b-2 border-primary"></div></div>}><DSS /></Suspense>} />
               <Route path="/projects" element={<Projects />} />

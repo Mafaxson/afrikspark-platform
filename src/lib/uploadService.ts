@@ -258,8 +258,51 @@ export class FileUploadService {
    * Check if bucket is public
    */
   private static isPublicBucket(bucket: string): boolean {
-    const publicBuckets = ['avatars', 'community-media', 'blog-media', 'project-media', 'testimonial-media', 'service-media', 'partnership-logos', 'venture-media', 'videos', 'audio-files'];
+    const publicBuckets = ['avatars', 'community-media', 'blog-media', 'project-media', 'testimonial-media', 'service-media', 'partnership-logos', 'venture-media', 'videos', 'audio-files', 'team-members'];
     return publicBuckets.includes(bucket);
+  }
+
+  /**
+   * Upload team member image directly to team-members bucket
+   */
+  static async uploadTeamMemberImage(file: File): Promise<string> {
+    try {
+      // Validate file
+      if (!file.type.startsWith('image/')) {
+        throw new Error('Only image files are allowed');
+      }
+
+      if (file.size > 5 * 1024 * 1024) {
+        throw new Error('Image size must be less than 5MB');
+      }
+
+      // Generate unique file path
+      const timestamp = Date.now();
+      const randomId = Math.random().toString(36).substring(7);
+      const filePath = `${timestamp}-${randomId}-${file.name}`;
+
+      // Upload to team-members bucket
+      const { data, error } = await supabase.storage
+        .from('team-members')
+        .upload(filePath, file, {
+          cacheControl: '3600',
+          upsert: false
+        });
+
+      if (error) {
+        throw new Error(`Upload failed: ${error.message}`);
+      }
+
+      // Get public URL
+      const { data: { publicUrl } } = supabase.storage
+        .from('team-members')
+        .getPublicUrl(filePath);
+
+      return publicUrl;
+    } catch (error) {
+      console.error('Team member image upload error:', error);
+      throw error;
+    }
   }
 }
 

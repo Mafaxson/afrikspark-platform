@@ -91,7 +91,7 @@ export function BlogComments({ blogId }: BlogCommentsProps) {
     return () => {
       supabase.removeChannel(channel);
     };
-  }, [fetchComments]);
+  }, [fetchComments, blogId]);
 
   const organizeComments = (flatComments: Comment[]): Comment[] => {
     const commentMap = new Map<string, Comment>();
