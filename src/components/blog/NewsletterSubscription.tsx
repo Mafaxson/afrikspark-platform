@@ -3,49 +3,34 @@ import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent } from "@/components/ui/card";
-import { toast } from "sonner";
 import { Mail } from "lucide-react";
 import { AnimateOnScroll } from "@/components/SectionComponents";
-import { z } from "zod";
-
-const emailSchema = z.string().email("Invalid email address");
 
 export function NewsletterSubscription() {
   const [email, setEmail] = useState("");
   const [loading, setLoading] = useState(false);
 
-  const handleSubscribe = async (e: React.FormEvent) => {
-    e.preventDefault();
-
-    try {
-      // Validate email
-      emailSchema.parse(email);
-
-      setLoading(true);
-      const { error } = await supabase
-        .from("newsletter_subscribers")
-        .insert({ email: email.toLowerCase().trim() });
-
-      if (error) {
-        if (error.code === "23505") {
-          toast.error("This email is already subscribed");
-        } else {
-          throw error;
-        }
-      } else {
-        toast.success("Successfully subscribed to newsletter!");
-        setEmail("");
-      }
-    } catch (error) {
-      if (error instanceof z.ZodError) {
-        toast.error(error.errors[0].message);
-      } else {
-        console.error("Error subscribing:", error);
-        toast.error("Failed to subscribe. Please try again.");
-      }
-    } finally {
-      setLoading(false);
+  const handleSubscribe = async () => {
+    if (!email.trim()) {
+      alert("Please enter a valid email address");
+      return;
     }
+
+    setLoading(true);
+
+    const { error } = await supabase
+      .from("newsletter_subscribers")
+      .insert([{ email }]);
+
+    if (error) {
+      console.error(error.message);
+      alert(error.message);
+    } else {
+      alert("Subscribed successfully!");
+      setEmail("");
+    }
+
+    setLoading(false);
   };
 
   return (
@@ -64,19 +49,18 @@ export function NewsletterSubscription() {
                 Get the latest articles and updates delivered to your inbox weekly
               </p>
             </div>
-            <form onSubmit={handleSubscribe} className="flex gap-2 w-full md:w-auto">
+            <div className="flex gap-2 w-full md:w-auto">
               <Input
                 type="email"
                 placeholder="Enter your email"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 className="md:w-64"
-                required
               />
-              <Button type="submit" disabled={loading}>
+              <Button onClick={handleSubscribe} disabled={loading}>
                 {loading ? "Subscribing..." : "Subscribe"}
               </Button>
-            </form>
+            </div>
           </div>
         </CardContent>
       </Card>

@@ -4,6 +4,7 @@ import { Layout } from "@/components/Layout";
 import { Section, SectionHeader, AnimateOnScroll, StatCounter } from "@/components/SectionComponents";
 import { TestimonialsSection } from "@/components/testimonials/TestimonialsSection";
 import { NewsletterSubscription } from "@/components/blog/NewsletterSubscription";
+import { PopupNewsletter } from "@/components/blog/PopupNewsletter";
 import { ArrowRight, Sparkles, Code, Palette, Video, TrendingUp, Users } from "lucide-react";
 
 const services = [
@@ -138,6 +139,8 @@ export default function Home() {
           <NewsletterSubscription />
         </div>
       </Section>
+      
+      <PopupNewsletter />
     </Layout>
   );
 }
