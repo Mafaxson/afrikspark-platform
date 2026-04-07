@@ -8,50 +8,64 @@ import { supabase } from "@/integrations/supabase/client";
 import { Link } from "react-router-dom";
 
 function ApplicationButton() {
-  const [link, setLink] = useState<string | null>(null);
+  const [settings, setSettings] = useState<{ application_link: string | null; is_open: boolean; note: string | null } | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
   const isMountedRef = useRef(true);
 
   useEffect(() => {
-    const fetchLink = async () => {
+    const fetchSettings = async () => {
       try {
         const { data, error } = await supabase
-          .from("site_settings")
-          .select("value")
-          .eq("key", "dss_application_link")
+          .from("application_settings")
+          .select("application_link,is_open,note")
+          .order("updated_at", { ascending: false })
+          .limit(1)
           .maybeSingle();
 
         if (!isMountedRef.current) return;
 
         if (error) {
-          console.error("Failed to load application link", error);
+          console.error("Failed to load application settings", error);
           return;
         }
 
-        if (data?.value) {
-          setLink(data.value);
-        }
+        setSettings(data ?? { application_link: null, is_open: false, note: null });
       } catch (error) {
-        console.error("Application link fetch error", error);
+        console.error("Application settings fetch error", error);
+      } finally {
+        if (isMountedRef.current) setIsLoading(false);
       }
     };
 
-    fetchLink();
+    fetchSettings();
 
     return () => {
       isMountedRef.current = false;
     };
   }, []);
 
-  if (!link) {
-    return <p className="text-muted-foreground text-sm">Applications are currently closed. Check back soon!</p>;
-  }
+  const isOpen = Boolean(settings?.is_open && settings.application_link);
 
   return (
-    <Button size="lg" className="w-full" asChild>
-      <a href={link} target="_blank" rel="noopener noreferrer">
-        Apply Now <ExternalLink className="ml-2 h-4 w-4" />
-      </a>
-    </Button>
+    <div className="space-y-3">
+      {isOpen ? (
+        <Button size="lg" className="w-full" asChild>
+          <a href={settings?.application_link ?? "#"} target="_blank" rel="noopener noreferrer">
+            Apply Now <ExternalLink className="ml-2 h-4 w-4" />
+          </a>
+        </Button>
+      ) : (
+        <Button size="lg" className="w-full" disabled>
+          Apply Now
+        </Button>
+      )}
+      {isLoading ? (
+        <p className="text-muted-foreground text-sm">Loading application settings…</p>
+      ) : (!isOpen ? (
+        <p className="text-muted-foreground text-sm">Applications are currently closed. Check back soon.</p>
+      ) : null)}
+      {settings?.note ? <p className="text-sm text-muted-foreground">{settings.note}</p> : null}
+    </div>
   );
 }
 

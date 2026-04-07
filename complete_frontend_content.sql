@@ -98,21 +98,15 @@ CREATE TABLE IF NOT EXISTS public.contact_messages (
 );
 
 -- =========================================
--- 7. DSS APPLICATIONS
+-- 7. APPLICATION SETTINGS
 -- =========================================
 
-CREATE TABLE IF NOT EXISTS public.dss_applications (
+CREATE TABLE IF NOT EXISTS public.application_settings (
   id uuid DEFAULT gen_random_uuid() PRIMARY KEY,
-  name text NOT NULL,
-  email text NOT NULL,
-  phone text NOT NULL,
-  city text NOT NULL,
-  age integer NOT NULL,
-  education text NOT NULL,
-  skill_interest text NOT NULL,
-  motivation text NOT NULL,
-  status text DEFAULT 'pending' CHECK (status IN ('pending', 'approved', 'rejected')),
-  created_at timestamp with time zone DEFAULT now()
+  application_link text,
+  is_open boolean DEFAULT false NOT NULL,
+  note text,
+  updated_at timestamp with time zone DEFAULT now()
 );
 
 -- =========================================
@@ -164,7 +158,7 @@ ALTER TABLE public.blog_posts ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.testimonials ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.newsletter_subscribers ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.contact_messages ENABLE ROW LEVEL SECURITY;
-ALTER TABLE public.dss_applications ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.application_settings ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.venture_applications ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.site_settings ENABLE ROW LEVEL SECURITY;
 
@@ -212,10 +206,9 @@ CREATE POLICY "Admins can view newsletter subscribers" ON public.newsletter_subs
 CREATE POLICY "Anyone can submit contact messages" ON public.contact_messages FOR INSERT WITH CHECK (true);
 CREATE POLICY "Admins can view contact messages" ON public.contact_messages FOR SELECT USING (EXISTS (SELECT 1 FROM public.user_roles WHERE user_id = auth.uid() AND role = 'admin'));
 
--- DSS applications policies
-CREATE POLICY "Anyone can submit DSS applications" ON public.dss_applications FOR INSERT WITH CHECK (true);
-CREATE POLICY "Admins can view DSS applications" ON public.dss_applications FOR SELECT USING (EXISTS (SELECT 1 FROM public.user_roles WHERE user_id = auth.uid() AND role = 'admin'));
-CREATE POLICY "Admins can update DSS applications" ON public.dss_applications FOR UPDATE USING (EXISTS (SELECT 1 FROM public.user_roles WHERE user_id = auth.uid() AND role = 'admin'));
+-- Application settings policies
+CREATE POLICY "Anyone can read application settings" ON public.application_settings FOR SELECT USING (true);
+CREATE POLICY "Admins can manage application settings" ON public.application_settings FOR ALL USING (EXISTS (SELECT 1 FROM public.user_roles WHERE user_id = auth.uid() AND role = 'admin'));
 
 -- Venture applications policies
 CREATE POLICY "Anyone can submit venture applications" ON public.venture_applications FOR INSERT WITH CHECK (true);

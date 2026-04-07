@@ -69,28 +69,22 @@ CREATE TRIGGER on_auth_user_created
   AFTER INSERT ON auth.users
   FOR EACH ROW EXECUTE FUNCTION public.handle_new_user();
 
--- DSS Applications
-CREATE TABLE public.dss_applications (
+-- Application Settings
+CREATE TABLE public.application_settings (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  name TEXT NOT NULL,
-  email TEXT NOT NULL,
-  phone TEXT NOT NULL,
-  city TEXT NOT NULL,
-  age INTEGER NOT NULL,
-  education TEXT NOT NULL,
-  skill_interest TEXT NOT NULL,
-  motivation TEXT NOT NULL,
-  status TEXT NOT NULL DEFAULT 'pending' CHECK (status IN ('pending', 'approved', 'rejected')),
-  created_at TIMESTAMPTZ DEFAULT now()
+  application_link TEXT,
+  is_open BOOLEAN DEFAULT false NOT NULL,
+  note TEXT,
+  updated_at TIMESTAMPTZ DEFAULT now()
 );
-ALTER TABLE public.dss_applications ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.application_settings ENABLE ROW LEVEL SECURITY;
 
-CREATE POLICY "Anyone can submit DSS application" ON public.dss_applications
-  FOR INSERT WITH CHECK (true);
-CREATE POLICY "Admins can view DSS applications" ON public.dss_applications
-  FOR SELECT USING (public.has_role(auth.uid(), 'admin'));
-CREATE POLICY "Admins can update DSS applications" ON public.dss_applications
+CREATE POLICY "Anyone can view application settings" ON public.application_settings
+  FOR SELECT USING (true);
+CREATE POLICY "Admins can manage application settings" ON public.application_settings
   FOR UPDATE USING (public.has_role(auth.uid(), 'admin'));
+CREATE POLICY "Admins can insert application settings" ON public.application_settings
+  FOR INSERT WITH CHECK (public.has_role(auth.uid(), 'admin'));
 
 -- Cohorts
 CREATE TABLE public.cohorts (

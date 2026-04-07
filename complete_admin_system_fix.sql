@@ -179,14 +179,11 @@ CREATE POLICY "Anyone can create contact messages" ON public.contact_messages
 CREATE POLICY "Admins can manage contact messages" ON public.contact_messages
   FOR ALL USING (public.has_role(auth.uid(), 'admin'));
 
--- DSS applications policies (existing)
-CREATE POLICY "Anyone can submit DSS application" ON public.dss_applications
-  FOR INSERT WITH CHECK (true);
+-- Application settings policies
+CREATE POLICY "Anyone can read application settings" ON public.application_settings
+  FOR SELECT USING (true);
 
-CREATE POLICY "Admins can view DSS applications" ON public.dss_applications
-  FOR SELECT USING (public.has_role(auth.uid(), 'admin'));
-
-CREATE POLICY "Admins can manage DSS applications" ON public.dss_applications
+CREATE POLICY "Admins can manage application settings" ON public.application_settings
   FOR ALL USING (public.has_role(auth.uid(), 'admin'));
 
 -- DSS projects policies

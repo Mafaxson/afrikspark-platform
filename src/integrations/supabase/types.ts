@@ -80,15 +80,108 @@ export type Database = {
           },
         ]
       }
+      comments: {
+        Row: {
+          content: string
+          created_at: string | null
+          id: string
+          name: string
+          post_id: string
+        }
+        Insert: {
+          content: string
+          id?: string
+          name: string
+          post_id: string
+        }
+        Update: {
+          content?: string
+          created_at?: string | null
+          id?: string
+          name?: string
+          post_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "comments_post_id_fkey"
+            columns: ["post_id"]
+            isOneToOne: false
+            referencedRelation: "blog_posts"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      blog_likes: {
+        Row: {
+          created_at: string | null
+          id: string
+          post_id: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string | null
+          id?: string
+          post_id: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string | null
+          id?: string
+          post_id?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "blog_likes_post_id_fkey"
+            columns: ["post_id"]
+            isOneToOne: false
+            referencedRelation: "blog_posts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "blog_likes_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      newsletter_subscribers: {
+        Row: {
+          email: string
+          id: string
+          is_active: boolean | null
+          subscribed_at: string | null
+        }
+        Insert: {
+          email: string
+          id?: string
+          is_active?: boolean | null
+          subscribed_at?: string | null
+        }
+        Update: {
+          email?: string
+          id?: string
+          is_active?: boolean | null
+          subscribed_at?: string | null
+        }
+        Relationships: []
+      }
       blog_posts: {
         Row: {
+          author: string | null
           author_id: string | null
           category: string | null
           content: string | null
+          cover_image: string | null
           created_at: string | null
           excerpt: string | null
           id: string
           image_url: string | null
+          is_published: boolean | null
+          media_type: string | null
+          media_url: string | null
           meta_description: string | null
           published_at: string | null
           reading_time: number | null
@@ -97,16 +190,22 @@ export type Database = {
           status: string | null
           tags: string[] | null
           title: string
+          video_url: string | null
           views: number | null
         }
         Insert: {
+          author?: string | null
           author_id?: string | null
           category?: string | null
           content?: string | null
+          cover_image?: string | null
           created_at?: string | null
           excerpt?: string | null
           id?: string
           image_url?: string | null
+          is_published?: boolean | null
+          media_type?: string | null
+          media_url?: string | null
           meta_description?: string | null
           published_at?: string | null
           reading_time?: number | null
@@ -115,16 +214,22 @@ export type Database = {
           status?: string | null
           tags?: string[] | null
           title: string
+          video_url?: string | null
           views?: number | null
         }
         Update: {
+          author?: string | null
           author_id?: string | null
           category?: string | null
           content?: string | null
+          cover_image?: string | null
           created_at?: string | null
           excerpt?: string | null
           id?: string
           image_url?: string | null
+          is_published?: boolean | null
+          media_type?: string | null
+          media_url?: string | null
           meta_description?: string | null
           published_at?: string | null
           reading_time?: number | null
@@ -133,6 +238,7 @@ export type Database = {
           status?: string | null
           tags?: string[] | null
           title?: string
+          video_url?: string | null
           views?: number | null
         }
         Relationships: []
@@ -415,48 +521,6 @@ export type Database = {
           id?: string
           receiver_id?: string
           sender_id?: string
-        }
-        Relationships: []
-      }
-      dss_applications: {
-        Row: {
-          age: number
-          city: string
-          created_at: string | null
-          education: string
-          email: string
-          id: string
-          motivation: string
-          name: string
-          phone: string
-          skill_interest: string
-          status: string
-        }
-        Insert: {
-          age: number
-          city: string
-          created_at?: string | null
-          education: string
-          email: string
-          id?: string
-          motivation: string
-          name: string
-          phone: string
-          skill_interest: string
-          status?: string
-        }
-        Update: {
-          age?: number
-          city?: string
-          created_at?: string | null
-          education?: string
-          email?: string
-          id?: string
-          motivation?: string
-          name?: string
-          phone?: string
-          skill_interest?: string
-          status?: string
         }
         Relationships: []
       }
@@ -859,6 +923,30 @@ export type Database = {
           key?: string
           updated_at?: string | null
           value?: string | null
+        }
+        Relationships: []
+      }
+      application_settings: {
+        Row: {
+          id: string
+          application_link: string | null
+          is_open: boolean
+          note: string | null
+          updated_at: string | null
+        }
+        Insert: {
+          id?: string
+          application_link?: string | null
+          is_open?: boolean
+          note?: string | null
+          updated_at?: string | null
+        }
+        Update: {
+          id?: string
+          application_link?: string | null
+          is_open?: boolean
+          note?: string | null
+          updated_at?: string | null
         }
         Relationships: []
       }

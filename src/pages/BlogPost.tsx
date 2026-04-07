@@ -1,15 +1,11 @@
-import { useEffect, useState } from "react";
+﻿import { useEffect, useState } from "react";
 import { useParams, Link } from "react-router-dom";
 import { Layout } from "@/components/Layout";
-import { AnimateOnScroll } from "@/components/SectionComponents";
 import { supabase } from "@/integrations/supabase/client";
 import { Badge } from "@/components/ui/badge";
-import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import { Calendar, Clock, Eye } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { Calendar, Clock, ArrowLeft, ExternalLink } from "lucide-react";
 import { format } from "date-fns";
-import { BlogComments } from "@/components/blog/BlogComments";
-import { RelatedArticles } from "@/components/blog/RelatedArticles";
-import { NewsletterSubscription } from "@/components/blog/NewsletterSubscription";
 import { SocialShare } from "@/components/blog/SocialShare";
 import { Helmet } from "react-helmet-async";
 import { toast } from "sonner";
@@ -20,64 +16,41 @@ interface BlogPost {
   slug: string;
   content: string;
   excerpt: string;
-  image_url: string;
-  category: string;
+  cover_image: string;
+  media_type: string;
+  media_url: string;
+  video_url: string;
+  author: string;
   tags: string[];
-  author_id: string;
+  is_published: boolean;
   published_at: string;
-  reading_time: number;
-  seo_title: string;
-  meta_description: string;
-  views: number;
-}
-
-interface Author {
-  display_name: string;
-  avatar_url: string;
+  created_at: string;
+  reading_time?: number | null;
 }
 
 export default function BlogPost() {
   const { slug } = useParams<{ slug: string }>();
   const [post, setPost] = useState<BlogPost | null>(null);
-  const [author, setAuthor] = useState<Author | null>(null);
   const [loading, setLoading] = useState(true);
+  const currentUrl = typeof window !== "undefined" ? window.location.href : "";
 
   useEffect(() => {
     if (!slug) return;
 
     const fetchPost = async () => {
       try {
-        // Fetch blog post
         const { data: postData, error: postError } = await supabase
           .from("blog_posts")
           .select("*")
           .eq("slug", slug)
-          .eq("status", "published")
+          .eq("is_published", true)
           .single();
 
         if (postError) throw postError;
-
         setPost(postData);
-
-        // Increment view count
-        await supabase
-          .from("blog_posts")
-          .update({ views: (postData.views || 0) + 1 })
-          .eq("id", postData.id);
-
-        // Fetch author info
-        if (postData.author_id) {
-          const { data: authorData } = await supabase
-            .from("profiles")
-            .select("display_name, avatar_url")
-            .eq("user_id", postData.author_id)
-            .single();
-
-          if (authorData) setAuthor(authorData);
-        }
       } catch (error) {
-        console.error("Error fetching blog post:", error);
-        toast.error("Failed to load blog post");
+        console.error("Error fetching post:", error);
+        toast.error("Post not found");
       } finally {
         setLoading(false);
       }
@@ -86,18 +59,82 @@ export default function BlogPost() {
     fetchPost();
   }, [slug]);
 
+  const renderMedia = () => {
+    if (!post) return null;
+
+    if (post.media_type === "image" && post.media_url) {
+      return (
+        <div className="my-8 rounded-lg overflow-hidden">
+          <img
+            src={post.media_url}
+            alt={post.title}
+            className="w-full h-auto max-h-96 object-cover"
+          />
+        </div>
+      );
+    }
+
+    if (post.media_type === "video" && post.media_url) {
+      return (
+        <div className="my-8 rounded-lg overflow-hidden">
+          <video
+            src={post.media_url}
+            controls
+            className="w-full h-auto max-h-96"
+            poster={post.cover_image || undefined}
+          >
+            Your browser does not support the video tag.
+          </video>
+        </div>
+      );
+    }
+
+    if (post.video_url) {
+      const youtubeMatch = post.video_url.match(/(?:youtube\.com\/(?:[^\/]+\/.+\/|(?:v|e(?:mbed)?)\/|.*[?&]v=)|youtu\.be\/)([^"&?\/\s]{11})/);
+      if (youtubeMatch) {
+        return (
+          <div className="my-8 rounded-lg overflow-hidden">
+            <div className="relative pb-[56.25%] h-0">
+              <iframe
+                src={`https://www.youtube.com/embed/${youtubeMatch[1]}`}
+                className="absolute top-0 left-0 w-full h-full rounded-lg"
+                frameBorder="0"
+                allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                allowFullScreen
+              />
+            </div>
+          </div>
+        );
+      }
+
+      return (
+        <div className="my-8 p-6 bg-blue-50 rounded-lg border border-blue-200">
+          <div className="flex items-center gap-3">
+            <ExternalLink className="h-6 w-6 text-blue-600" />
+            <div>
+              <p className="font-medium text-blue-900">External Video</p>
+              <a
+                href={post.video_url}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="text-blue-600 hover:underline"
+              >
+                Watch on external site
+              </a>
+            </div>
+          </div>
+        </div>
+      );
+    }
+
+    return null;
+  };
+
   if (loading) {
     return (
       <Layout>
-        <div className="container mx-auto px-4 py-20">
-          <div className="max-w-4xl mx-auto">
-            <div className="animate-pulse space-y-4">
-              <div className="h-8 bg-muted rounded w-3/4"></div>
-              <div className="h-64 bg-muted rounded"></div>
-              <div className="h-4 bg-muted rounded w-full"></div>
-              <div className="h-4 bg-muted rounded w-5/6"></div>
-            </div>
-          </div>
+        <div className="min-h-screen flex items-center justify-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary"></div>
         </div>
       </Layout>
     );
@@ -106,11 +143,16 @@ export default function BlogPost() {
   if (!post) {
     return (
       <Layout>
-        <div className="container mx-auto px-4 py-20 text-center">
-          <h1 className="text-4xl font-bold mb-4">Post Not Found</h1>
-          <Link to="/blog" className="text-primary hover:underline">
-            Back to Blog
-          </Link>
+        <div className="min-h-screen flex items-center justify-center">
+          <div className="text-center">
+            <h1 className="text-2xl font-bold mb-4">Post Not Found</h1>
+            <Link to="/blog">
+              <Button>
+                <ArrowLeft className="h-4 w-4 mr-2" />
+                Back to Blog
+              </Button>
+            </Link>
+          </div>
         </div>
       </Layout>
     );
@@ -119,94 +161,77 @@ export default function BlogPost() {
   return (
     <>
       <Helmet>
-        <title>{post.seo_title || post.title} | AfrikSpark Blog</title>
-        <meta name="description" content={post.meta_description || post.excerpt} />
-        <meta property="og:title" content={post.seo_title || post.title} />
-        <meta property="og:description" content={post.meta_description || post.excerpt} />
-        <meta property="og:image" content={post.image_url} />
-        <meta property="og:type" content="article" />
-        <meta name="twitter:card" content="summary_large_image" />
-        <meta name="twitter:title" content={post.seo_title || post.title} />
-        <meta name="twitter:description" content={post.meta_description || post.excerpt} />
-        <meta name="twitter:image" content={post.image_url} />
+        <title>{post.title} | AfrikSpark Blog</title>
+        <meta name="description" content={post.excerpt} />
+        {post.cover_image && <meta property="og:image" content={post.cover_image} />}
       </Helmet>
 
       <Layout>
-        <article className="container mx-auto px-4 py-12">
-          <div className="max-w-4xl mx-auto">
-            <AnimateOnScroll>
-              {/* Header */}
-              <div className="mb-8">
-                <Badge className="mb-4">{post.category}</Badge>
-                <h1 className="font-display text-4xl md:text-5xl font-bold text-foreground mb-6">
-                  {post.title}
-                </h1>
+        <article className="max-w-4xl mx-auto px-4 py-8">
+          <Link to="/blog" className="inline-flex items-center text-muted-foreground hover:text-foreground mb-6">
+            <ArrowLeft className="h-4 w-4 mr-2" />
+            Back to Blog
+          </Link>
 
-                {/* Meta Info */}
-                <div className="flex flex-wrap items-center gap-6 text-muted-foreground mb-6">
-                  {author && (
-                    <div className="flex items-center gap-2">
-                      <Avatar className="h-10 w-10">
-                        <AvatarImage src={author.avatar_url} />
-                        <AvatarFallback>{author.display_name?.[0] || "A"}</AvatarFallback>
-                      </Avatar>
-                      <span className="font-medium">{author.display_name || "AfrikSpark Team"}</span>
-                    </div>
-                  )}
-                  <div className="flex items-center gap-1">
-                    <Calendar className="h-4 w-4" />
-                    <span>{format(new Date(post.published_at), "MMM dd, yyyy")}</span>
-                  </div>
-                  <div className="flex items-center gap-1">
-                    <Clock className="h-4 w-4" />
-                    <span>{post.reading_time} min read</span>
-                  </div>
-                  <div className="flex items-center gap-1">
-                    <Eye className="h-4 w-4" />
-                    <span>{post.views || 0} views</span>
-                  </div>
-                </div>
-
-                {/* Social Share */}
-                <SocialShare title={post.title} url={window.location.href} />
-              </div>
-
-              {/* Featured Image */}
-              {post.image_url && (
-                <img
-                  src={post.image_url}
-                  alt={post.title}
-                  className="w-full h-[400px] object-cover rounded-lg mb-8"
-                  loading="lazy"
-                />
-              )}
-
-              {/* Content */}
-              <div
-                className="prose prose-lg max-w-none mb-12"
-                dangerouslySetInnerHTML={{ __html: post.content }}
+          <div className="mb-10 rounded-3xl border border-border bg-card p-8 shadow-sm">
+            <div className="flex flex-col md:flex-row items-start gap-6 mb-6">
+              <img
+                src="/logo.png"
+                alt="AfrikSpark"
+                className="w-16 h-16 rounded-full object-cover"
               />
-
-              {/* Tags */}
-              {post.tags && post.tags.length > 0 && (
-                <div className="flex flex-wrap gap-2 mb-12">
-                  {post.tags.map((tag, index) => (
-                    <Badge key={index} variant="outline">
-                      {tag}
-                    </Badge>
-                  ))}
+              <div>
+                <p className="text-sm uppercase tracking-[0.3em] text-muted-foreground mb-2">AfrikSpark Blog</p>
+                <h1 className="text-4xl font-bold mb-3">{post.title}</h1>
+                <div className="flex flex-wrap items-center gap-4 text-sm text-muted-foreground">
+                  <span className="inline-flex items-center gap-2">
+                    <Calendar className="h-4 w-4" />
+                    {post.published_at ? format(new Date(post.published_at), "MMMM dd, yyyy") : ""}
+                  </span>
+                  <span className="inline-flex items-center gap-2">
+                    <Clock className="h-4 w-4" />
+                    {post.reading_time || 1} min read
+                  </span>
                 </div>
-              )}
-            </AnimateOnScroll>
+              </div>
+            </div>
 
-            {/* Related Articles */}
-            <RelatedArticles currentPostId={post.id} category={post.category} />
+            {post.excerpt && (
+              <p className="text-lg text-muted-foreground leading-relaxed">
+                {post.excerpt}
+              </p>
+            )}
+          </div>
 
-            {/* Newsletter Subscription */}
-            <NewsletterSubscription />
+          {post.cover_image && !post.media_url && (
+            <div className="mb-10 rounded-3xl overflow-hidden shadow-sm border border-border">
+              <img
+                src={post.cover_image}
+                alt={post.title}
+                className="w-full h-72 md:h-[32rem] object-cover"
+              />
+            </div>
+          )}
 
-            {/* Comments Section */}
-            <BlogComments blogId={post.id} />
+          {renderMedia()}
+
+          {post.tags && post.tags.length > 0 && (
+            <div className="mb-6 flex flex-wrap gap-3">
+              {post.tags.map((tag, index) => (
+                <Badge key={index} variant="secondary">
+                  {tag}
+                </Badge>
+              ))}
+            </div>
+          )}
+
+          <div className="prose prose-lg max-w-none mb-10" dangerouslySetInnerHTML={{ __html: post.content }} />
+
+          <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between border-t border-border pt-6">
+            <div className="text-sm text-muted-foreground">
+              <p className="font-medium">Share this article</p>
+            </div>
+            <SocialShare title={post.title} url={currentUrl} />
           </div>
         </article>
       </Layout>

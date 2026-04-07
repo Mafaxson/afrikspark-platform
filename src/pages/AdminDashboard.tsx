@@ -7,35 +7,16 @@ import { getTestimonialSource } from "@/lib/testimonials";
 import { Layout } from "@/components/Layout";
 import { Section } from "@/components/SectionComponents";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Textarea } from "@/components/ui/textarea";
 import { useToast } from "@/hooks/use-toast";
 import { BlogManagement } from "@/components/admin/BlogManagement";
 import { TestimonialManagement } from "@/components/admin/TestimonialManagement";
 import { FileUploadService } from "@/lib/uploadService";
 import {
   Users, FileText, MessageSquare, GraduationCap, ChevronRight, Mail,
-  Check, X, Plus, Trash2, Edit, Star, UserCheck, Link as LinkIcon, Save,
+  Check, X, Plus, Trash2, Edit, Star, UserCheck,
   Hash, Megaphone, Calendar, FolderOpen, Shield, Bell, Briefcase,
   Settings, Upload, Download, Eye, Image, Video, File, HardDrive
 } from "lucide-react";
-
-interface DSSApplication {
-  id: string;
-  name: string;
-  email: string;
-  phone: string;
-  institution: string;
-  program: string;
-  year: string;
-  status: string;
-  created_at: string;
-  age?: string;
-  education?: string;
-  skill_interest?: string;
-  city?: string;
-  motivation?: string;
-}
 
 interface Channel {
   id: string;
@@ -85,18 +66,7 @@ interface ContactMessage {
   created_at: string;
 }
 
-interface MarketApplication {
-  id: string;
-  startup_name: string;
-  founder_name: string;
-  email: string;
-  website?: string;
-  description?: string;
-  logo_url?: string;
-  created_at?: string;
-}
-
-type Tab = "overview" | "blog" | "messages" | "testimonies" | "applications" | "community" | "settings";
+type Tab = "overview" | "blog" | "messages" | "testimonies" | "community";
 
 export default function AdminDashboard() {
   const { user, loading } = useAuth();
@@ -109,9 +79,7 @@ export default function AdminDashboard() {
     { id: "blog", label: "Blog", icon: FileText },
     { id: "messages", label: "Contacts", icon: Mail },
     { id: "testimonies", label: "Testimonials", icon: Star },
-    { id: "applications", label: "Applications", icon: FileText },
     { id: "community", label: "Community", icon: UserCheck },
-    { id: "settings", label: "Settings", icon: LinkIcon },
   ];
 
   return (
@@ -136,9 +104,7 @@ export default function AdminDashboard() {
         {activeTab === "blog" && <BlogPanel />}
         {activeTab === "messages" && <MessagesPanel />}
         {activeTab === "testimonies" && <TestimoniesPanel />}
-        {activeTab === "applications" && <ApplicationsPanel />}
         {activeTab === "community" && <CommunityPanel />}
-        {activeTab === "settings" && <SettingsPanel />}
       </Section>
     </Layout>
   );
@@ -153,8 +119,7 @@ function OverviewPanel() {
     queryKey: ['adminOverviewStats'],
     queryFn: async () => {
       const source = await getTestimonialSource();
-      const [apps, communityMembers, messages, blogs, testimonies, pending, channels, events, resources] = await Promise.all([
-        supabase.from("dss_applications").select("id", { count: "exact", head: true }),
+      const [communityMembers, messages, blogs, testimonies, pending, channels, events, resources] = await Promise.all([
         supabase.from("community_members").select("id", { count: "exact", head: true }),
         supabase.from("contact_messages").select("id", { count: "exact", head: true }),
         supabase.from("blog_posts").select("id", { count: "exact", head: true }),
@@ -166,7 +131,6 @@ function OverviewPanel() {
       ]);
 
       return {
-        applications: apps.count ?? 0,
         communityMembers: communityMembers.count ?? 0,
         messages: messages.count ?? 0,
         blogs: blogs.count ?? 0,
@@ -200,7 +164,6 @@ function OverviewPanel() {
   }
 
   const cards = [
-    { label: "DSS Applications", value: stats.applications ?? 0, icon: GraduationCap },
     { label: "Community Members", value: stats.communityMembers ?? 0, icon: Users },
     { label: "Channels", value: stats.channels ?? 0, icon: Hash },
     { label: "Events", value: stats.events ?? 0, icon: Calendar },
@@ -454,150 +417,6 @@ function CommunityPanel() {
   );
 }
 
-// ===== APPLICATIONS =====
-function ApplicationsPanel() {
-  const [applications, setApplications] = useState<MarketApplication[]>([]);
-  const [approving, setApproving] = useState<string | null>(null);
-  const { toast } = useToast();
-
-  const fetchApplications = useCallback(async () => {
-    try {
-      const { data, error } = await supabase
-        .from("startup_applications")
-        .select("*")
-        .order("created_at", { ascending: false });
-
-      if (error) {
-        console.error("Error fetching applications:", error);
-        toast({ title: "Error", description: "Failed to load applications", variant: "destructive" });
-        return;
-      }
-
-      setApplications((data || []) as MarketApplication[]);
-    } catch (error) {
-      console.error("Unexpected error fetching applications:", error);
-      toast({ title: "Error", description: "Failed to load applications", variant: "destructive" });
-    }
-  }, [toast]);
-
-  const approveApplication = async (appId: string, startup: MarketApplication) => {
-    if (!startup.logo_url) {
-      toast({ title: "Error", description: "Logo is required to approve application", variant: "destructive" });
-      return;
-    }
-
-    setApproving(appId);
-
-    try {
-      const { error: insertError } = await supabase.from("startups").insert({
-        name: startup.startup_name,
-        logo_url: startup.logo_url,
-        website: startup.website || "",
-      });
-
-      if (insertError) {
-        console.error("Error inserting startup:", insertError);
-        toast({ title: "Error", description: "Failed to approve application", variant: "destructive" });
-        setApproving(null);
-        return;
-      }
-
-      toast({ title: "Success", description: "Application approved and added to portfolio" });
-      setApplications(applications.filter(app => app.id !== appId));
-      setApproving(null);
-    } catch (error) {
-      console.error("Unexpected error approving application:", error);
-      toast({ title: "Error", description: "Failed to approve application", variant: "destructive" });
-      setApproving(null);
-    }
-  };
-
-  const rejectApplication = async (appId: string) => {
-    if (!confirm("Are you sure you want to reject this application?")) return;
-
-    try {
-      const { error } = await supabase.from("startup_applications").delete().eq("id", appId);
-
-      if (error) {
-        console.error("Error rejecting application:", error);
-        toast({ title: "Error", description: "Failed to reject application", variant: "destructive" });
-        return;
-      }
-
-      toast({ title: "Application rejected" });
-      setApplications(applications.filter(app => app.id !== appId));
-    } catch (error) {
-      console.error("Unexpected error rejecting application:", error);
-      toast({ title: "Error", description: "Failed to reject application", variant: "destructive" });
-    }
-  };
-
-  useEffect(() => {
-    fetchApplications();
-  }, [fetchApplications]);
-
-  return (
-    <div className="space-y-6">
-      <div className="bg-card rounded-xl p-4 border border-border mb-4">
-        <p className="text-sm text-muted-foreground">
-          Review and approve startup applications to add them to the portfolio.
-        </p>
-      </div>
-
-      <div className="space-y-4">
-        <h3 className="font-semibold">Pending Applications ({applications.length})</h3>
-        {applications.length === 0 && <p className="text-muted-foreground">No pending applications.</p>}
-        {applications.map(app => (
-          <div key={app.id} className="bg-card rounded-xl p-6 border border-border">
-            <div className="flex items-start justify-between gap-4">
-              <div className="flex-1">
-                {app.logo_url && (
-                  <img
-                    src={app.logo_url}
-                    alt="Logo"
-                    className="h-16 w-16 object-cover rounded mb-4"
-                  />
-                )}
-                <h4 className="font-semibold text-lg mb-2">{app.startup_name}</h4>
-                <div className="space-y-1 mb-4">
-                  <p className="text-sm"><strong>Founder:</strong> {app.founder_name}</p>
-                  <p className="text-sm"><strong>Email:</strong> {app.email}</p>
-                  {app.website && (
-                    <p className="text-sm"><strong>Website:</strong> <a href={app.website} target="_blank" rel="noopener noreferrer" className="text-primary hover:underline">{app.website}</a></p>
-                  )}
-                  <p className="text-xs text-muted-foreground"><strong>Submitted:</strong> {new Date(app.created_at).toLocaleString()}</p>
-                </div>
-                <div className="mb-4 p-3 bg-muted rounded">
-                  <p className="text-sm"><strong>Description:</strong></p>
-                  <p className="text-sm text-muted-foreground mt-1">{app.description}</p>
-                </div>
-              </div>
-              <div className="flex flex-col gap-2 min-w-max">
-                <Button
-                  size="sm"
-                  variant="default"
-                  onClick={() => approveApplication(app.id, app)}
-                  disabled={approving === app.id}
-                >
-                  {approving === app.id ? "Approving..." : <><Check className="h-4 w-4 mr-1" /> Approve</>}
-                </Button>
-                <Button
-                  size="sm"
-                  variant="destructive"
-                  onClick={() => rejectApplication(app.id)}
-                  disabled={approving === app.id}
-                >
-                  <X className="h-4 w-4 mr-1" /> Reject
-                </Button>
-              </div>
-            </div>
-          </div>
-        ))}
-      </div>
-    </div>
-  );
-}
-
 // ===== EVENTS =====
 function EventsPanel() {
   const { user } = useAuth();
@@ -655,50 +474,7 @@ function EventsPanel() {
   );
 }
 
-// ===== SETTINGS =====
-function SettingsPanel() {
-  const [applicationLink, setApplicationLink] = useState("");
-  const [saved, setSaved] = useState(false);
-  const { toast } = useToast();
 
-  useEffect(() => {
-    const load = async () => {
-      const { data, error } = await supabase.from("site_settings").select("value").eq("key", "dss_application_link").maybeSingle();
-      if (!error && data?.value) setApplicationLink(data.value);
-    };
-    load();
-  }, []);
-
-  const saveLink = async () => {
-    const { data: existing, error } = await supabase.from("site_settings").select("id").eq("key", "dss_application_link").maybeSingle();
-    if (error) {
-      console.error("Settings load error", error);
-      toast({ title: "Error", description: "Unable to save settings.", variant: "destructive" });
-      return;
-    }
-
-    if (existing) {
-      await supabase.from("site_settings").update({ value: applicationLink }).eq("key", "dss_application_link");
-    } else {
-      await supabase.from("site_settings").insert({ key: "dss_application_link", value: applicationLink });
-    }
-
-    toast({ title: "Saved" });
-    setSaved(true);
-    setTimeout(() => setSaved(false), 2000);
-  };
-
-  return (
-    <div className="space-y-6">
-      <div className="bg-card rounded-xl p-6 border border-border space-y-4">
-        <h3 className="font-semibold">DSS Application Form Link</h3>
-        <p className="text-sm text-muted-foreground">Set the external application form URL. This is where applicants will be redirected to apply and pay the fee.</p>
-        <Input placeholder="https://forms.google.com/..." value={applicationLink} onChange={e => setApplicationLink(e.target.value)} />
-        <Button onClick={saveLink} size="sm"><Save className="h-4 w-4 mr-1" /> {saved ? "Saved!" : "Save Link"}</Button>
-      </div>
-    </div>
-  );
-}
 
 
 

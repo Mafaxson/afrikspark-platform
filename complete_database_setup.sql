@@ -35,21 +35,15 @@ CREATE TABLE IF NOT EXISTS public.user_roles (
 );
 
 -- =========================================
--- 4. CREATE DSS APPLICATIONS TABLE
+-- 4. CREATE APPLICATION SETTINGS TABLE
 -- =========================================
 
-CREATE TABLE IF NOT EXISTS public.dss_applications (
+CREATE TABLE IF NOT EXISTS public.application_settings (
   id uuid DEFAULT gen_random_uuid() PRIMARY KEY,
-  name text NOT NULL,
-  email text NOT NULL,
-  phone text NOT NULL,
-  city text NOT NULL,
-  age integer NOT NULL,
-  education text NOT NULL,
-  skill_interest text NOT NULL,
-  motivation text NOT NULL,
-  status text DEFAULT 'pending' CHECK (status IN ('pending', 'approved', 'rejected')),
-  created_at timestamp with time zone DEFAULT now()
+  application_link text,
+  is_open boolean DEFAULT false NOT NULL,
+  note text,
+  updated_at timestamp with time zone DEFAULT now()
 );
 
 -- =========================================
@@ -337,7 +331,7 @@ CREATE TABLE IF NOT EXISTS public.media_assets (
 
 ALTER TABLE public.profiles ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.user_roles ENABLE ROW LEVEL SECURITY;
-ALTER TABLE public.dss_applications ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.application_settings ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.cohorts ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.students ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.blog_posts ENABLE ROW LEVEL SECURITY;
@@ -381,10 +375,9 @@ CREATE POLICY "Users can update their own profile" ON public.profiles FOR UPDATE
 CREATE POLICY "Anyone can create a profile" ON public.profiles FOR INSERT WITH CHECK (true);
 CREATE POLICY "Admins can view all profiles" ON public.profiles FOR SELECT USING (EXISTS (SELECT 1 FROM public.user_roles WHERE user_id = auth.uid() AND role = 'admin'));
 
--- DSS Applications policies
-CREATE POLICY "Anyone can submit DSS applications" ON public.dss_applications FOR INSERT WITH CHECK (true);
-CREATE POLICY "Admins can view DSS applications" ON public.dss_applications FOR SELECT USING (EXISTS (SELECT 1 FROM public.user_roles WHERE user_id = auth.uid() AND role = 'admin'));
-CREATE POLICY "Admins can update DSS applications" ON public.dss_applications FOR UPDATE USING (EXISTS (SELECT 1 FROM public.user_roles WHERE user_id = auth.uid() AND role = 'admin'));
+-- Application settings policies
+CREATE POLICY "Anyone can read application settings" ON public.application_settings FOR SELECT USING (true);
+CREATE POLICY "Admins can manage application settings" ON public.application_settings FOR ALL USING (EXISTS (SELECT 1 FROM public.user_roles WHERE user_id = auth.uid() AND role = 'admin'));
 
 -- Cohorts policies
 CREATE POLICY "Anyone can view cohorts" ON public.cohorts FOR SELECT USING (true);

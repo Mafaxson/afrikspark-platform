@@ -20,13 +20,3 @@ DROP POLICY IF EXISTS "Blog posts viewable by everyone" ON public.blog_posts;
 CREATE POLICY "Blog posts viewable by everyone"
   ON public.blog_posts FOR SELECT
   USING (status = 'published' OR public.has_role(auth.uid(), 'admin'));
-
--- Update the published blog comments policy
-DROP POLICY IF EXISTS "Anyone can view published blog comments" ON public.blog_comments;
-CREATE POLICY "Anyone can view published blog comments"
-  ON public.blog_comments FOR SELECT
-  USING (EXISTS (
-    SELECT 1 FROM public.blog_posts
-    WHERE blog_posts.id = blog_comments.blog_id
-    AND blog_posts.status = 'published'
-  ));

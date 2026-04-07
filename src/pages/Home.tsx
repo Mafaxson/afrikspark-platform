@@ -3,7 +3,8 @@ import { Button } from "@/components/ui/button";
 import { Layout } from "@/components/Layout";
 import { Section, SectionHeader, AnimateOnScroll, StatCounter } from "@/components/SectionComponents";
 import { TestimonialsSection } from "@/components/testimonials/TestimonialsSection";
-import { ArrowRight, Sparkles, Code, Palette, Video, TrendingUp, Users, Globe } from "lucide-react";
+import { NewsletterSubscription } from "@/components/blog/NewsletterSubscription";
+import { ArrowRight, Sparkles, Code, Palette, Video, TrendingUp, Users } from "lucide-react";
 
 const services = [
   { icon: Palette, title: "Graphic Design", desc: "Brand identities, marketing materials, and visual storytelling." },
@@ -124,6 +125,17 @@ export default function Home() {
               </Button>
             </div>
           </div>
+        </div>
+      </Section>
+
+      <Section alt>
+        <SectionHeader
+          badge="Stay Updated"
+          title="Subscribe to the AfrikSpark Newsletter"
+          description="Receive curated insights, resource updates, and company news directly in your inbox."
+        />
+        <div className="max-w-3xl mx-auto">
+          <NewsletterSubscription />
         </div>
       </Section>
     </Layout>
