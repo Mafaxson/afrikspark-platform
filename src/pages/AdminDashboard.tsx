@@ -70,8 +70,7 @@ interface ContactMessage {
 interface NewsletterSubscriber {
   id: string;
   email: string;
-  subscribed_at: string;
-  is_active: boolean;
+  created_at: string;
 }
 
 type Tab = "overview" | "blog" | "messages" | "testimonies" | "community" | "newsletter";
@@ -304,7 +303,6 @@ function NewsletterPanel() {
                 <tr>
                   <th className="text-left p-4 font-semibold text-sm text-muted-foreground">Email</th>
                   <th className="text-left p-4 font-semibold text-sm text-muted-foreground">Date Subscribed</th>
-                  <th className="text-left p-4 font-semibold text-sm text-muted-foreground">Status</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-border">
@@ -312,20 +310,7 @@ function NewsletterPanel() {
                   <tr key={subscriber.id} className="hover:bg-muted/30 transition-colors">
                     <td className="p-4 text-sm">{subscriber.email}</td>
                     <td className="p-4 text-sm text-muted-foreground">
-                      {format(new Date(subscriber.subscribed_at), "MMM d, yyyy • h:mm a")}
-                    </td>
-                    <td className="p-4 text-sm">
-                      {subscriber.is_active ? (
-                        <span className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-green-100 text-green-700 text-xs font-medium">
-                          <Check className="w-3 h-3" />
-                          Active
-                        </span>
-                      ) : (
-                        <span className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-gray-100 text-gray-700 text-xs font-medium">
-                          <X className="w-3 h-3" />
-                          Inactive
-                        </span>
-                      )}
+                      {format(new Date(subscriber.created_at), "MMM d, yyyy • h:mm a")}
                     </td>
                   </tr>
                 ))}
