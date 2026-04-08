@@ -3,6 +3,11 @@
 
 -- Add new columns to blog_posts table
 ALTER TABLE public.blog_posts
+ADD COLUMN IF NOT EXISTS excerpt text,
+ADD COLUMN IF NOT EXISTS tags text[] DEFAULT '{}',
+ADD COLUMN IF NOT EXISTS published_at timestamp with time zone,
+ADD COLUMN IF NOT EXISTS reading_time integer DEFAULT 1,
+ADD COLUMN IF NOT EXISTS author_id uuid REFERENCES auth.users(id) ON DELETE SET NULL,
 ADD COLUMN IF NOT EXISTS media_type text DEFAULT 'none' CHECK (media_type IN ('image', 'video', 'link', 'none')),
 ADD COLUMN IF NOT EXISTS media_url text,
 ADD COLUMN IF NOT EXISTS video_url text,
@@ -10,12 +15,14 @@ ADD COLUMN IF NOT EXISTS cover_image text,
 ADD COLUMN IF NOT EXISTS is_published boolean DEFAULT false,
 ADD COLUMN IF NOT EXISTS author text;
 
--- Update existing records to set is_published based on status
+-- Update existing records to set default values
 UPDATE public.blog_posts
-SET is_published = (status = 'published'),
-    cover_image = featured_image_url,
-    author = 'AfrikSpark Team'
-WHERE is_published IS NULL;
+SET
+  excerpt = substring(content from 1 for 200) || '...' WHERE excerpt IS NULL AND content IS NOT NULL,
+  tags = '{}' WHERE tags IS NULL,
+  is_published = CASE WHEN status = 'published' THEN true ELSE false END,
+  author = 'AfrikSpark Team' WHERE author IS NULL,
+  reading_time = 1 WHERE reading_time IS NULL;
 
 -- Create blog-media storage bucket
 INSERT INTO storage.buckets (id, name, public)
