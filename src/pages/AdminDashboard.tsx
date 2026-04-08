@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
+import { format } from "date-fns";
 import { useAuth } from "@/contexts/AuthContext";
 import { supabase } from "@/integrations/supabase/client";
 import type { Database } from "@/integrations/supabase/types";
@@ -66,7 +67,14 @@ interface ContactMessage {
   created_at: string;
 }
 
-type Tab = "overview" | "blog" | "messages" | "testimonies" | "community";
+interface NewsletterSubscriber {
+  id: string;
+  email: string;
+  subscribed_at: string;
+  is_active: boolean;
+}
+
+type Tab = "overview" | "blog" | "messages" | "testimonies" | "community" | "newsletter";
 
 export default function AdminDashboard() {
   const { user, loading } = useAuth();
@@ -80,6 +88,7 @@ export default function AdminDashboard() {
     { id: "messages", label: "Contacts", icon: Mail },
     { id: "testimonies", label: "Testimonials", icon: Star },
     { id: "community", label: "Community", icon: UserCheck },
+    { id: "newsletter", label: "Newsletter", icon: Bell },
   ];
 
   return (
@@ -105,6 +114,7 @@ export default function AdminDashboard() {
         {activeTab === "messages" && <MessagesPanel />}
         {activeTab === "testimonies" && <TestimoniesPanel />}
         {activeTab === "community" && <CommunityPanel />}
+        {activeTab === "newsletter" && <NewsletterPanel />}
       </Section>
     </Layout>
   );
@@ -119,7 +129,7 @@ function OverviewPanel() {
     queryKey: ['adminOverviewStats'],
     queryFn: async () => {
       const source = await getTestimonialSource();
-      const [communityMembers, messages, blogs, testimonies, pending, channels, events, resources] = await Promise.all([
+      const [communityMembers, messages, blogs, testimonies, pending, channels, events, resources, newsletter] = await Promise.all([
         supabase.from("community_members").select("id", { count: "exact", head: true }),
         supabase.from("contact_messages").select("id", { count: "exact", head: true }),
         supabase.from("blog_posts").select("id", { count: "exact", head: true }),
@@ -128,6 +138,7 @@ function OverviewPanel() {
         supabase.from("channels").select("id", { count: "exact", head: true }),
         supabase.from("events").select("id", { count: "exact", head: true }),
         supabase.from("resources").select("id", { count: "exact", head: true }),
+        supabase.from("newsletter_subscribers").select("*", { count: "exact", head: true }),
       ]);
 
       return {
@@ -139,6 +150,7 @@ function OverviewPanel() {
         channels: channels.count ?? 0,
         events: events.count ?? 0,
         resources: resources.count ?? 0,
+        newsletter: newsletter.count ?? 0,
       };
     },
     staleTime: 5 * 60 * 1000, // 5 minutes
@@ -172,6 +184,7 @@ function OverviewPanel() {
     { label: "Contact Messages", value: stats.messages ?? 0, icon: Mail },
     { label: "Testimonies", value: stats.testimonies ?? 0, icon: Star },
     { label: "Pending Approvals", value: stats.pendingApprovals ?? 0, icon: UserCheck },
+    { label: "Newsletter Subscribers", value: stats.newsletter ?? 0, icon: Bell },
   ];
 
   return (
@@ -220,6 +233,109 @@ function MessagesPanel() {
 // ===== TESTIMONIES =====
 function TestimoniesPanel() {
   return <TestimonialManagement />;
+}
+
+// ===== NEWSLETTER =====
+function NewsletterPanel() {
+  const [subscribers, setSubscribers] = useState<NewsletterSubscriber[]>([]);
+  const [count, setCount] = useState(0);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    const fetchSubscribers = async () => {
+      setLoading(true);
+      try {
+        // Get total count
+        const { count: totalCount } = await supabase
+          .from("newsletter_subscribers")
+          .select("*", { count: "exact", head: true });
+
+        // Get all subscribers sorted by newest first
+        const { data, error } = await supabase
+          .from("newsletter_subscribers")
+          .select("*")
+          .order("created_at", { ascending: false });
+
+        if (error) throw error;
+
+        setCount(totalCount ?? 0);
+        setSubscribers(data as NewsletterSubscriber[] ?? []);
+      } catch (error) {
+        console.error("Error fetching newsletter subscribers:", error);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchSubscribers();
+  }, []);
+
+  return (
+    <div className="space-y-6">
+      {/* Stats Card */}
+      <div className="bg-card rounded-xl p-6 border border-border shadow-sm">
+        <div className="flex items-center justify-between">
+          <div>
+            <p className="text-sm text-muted-foreground mb-1">Total Newsletter Subscribers</p>
+            <p className="text-3xl font-bold text-foreground">{count}</p>
+          </div>
+          <Bell className="w-10 h-10 text-orange-500" />
+        </div>
+      </div>
+
+      {/* Subscribers Table */}
+      <div className="bg-card rounded-xl border border-border shadow-sm overflow-hidden">
+        <div className="p-6 border-b border-border">
+          <h2 className="font-semibold text-lg">All Subscribers</h2>
+        </div>
+
+        {loading ? (
+          <div className="p-12 flex justify-center items-center">
+            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-orange-500"></div>
+          </div>
+        ) : subscribers.length === 0 ? (
+          <div className="p-12 text-center">
+            <p className="text-muted-foreground">No subscribers yet</p>
+          </div>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="w-full">
+              <thead className="bg-muted/50 border-b border-border">
+                <tr>
+                  <th className="text-left p-4 font-semibold text-sm text-muted-foreground">Email</th>
+                  <th className="text-left p-4 font-semibold text-sm text-muted-foreground">Date Subscribed</th>
+                  <th className="text-left p-4 font-semibold text-sm text-muted-foreground">Status</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-border">
+                {subscribers.map((subscriber) => (
+                  <tr key={subscriber.id} className="hover:bg-muted/30 transition-colors">
+                    <td className="p-4 text-sm">{subscriber.email}</td>
+                    <td className="p-4 text-sm text-muted-foreground">
+                      {format(new Date(subscriber.subscribed_at), "MMM d, yyyy • h:mm a")}
+                    </td>
+                    <td className="p-4 text-sm">
+                      {subscriber.is_active ? (
+                        <span className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-green-100 text-green-700 text-xs font-medium">
+                          <Check className="w-3 h-3" />
+                          Active
+                        </span>
+                      ) : (
+                        <span className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-gray-100 text-gray-700 text-xs font-medium">
+                          <X className="w-3 h-3" />
+                          Inactive
+                        </span>
+                      )}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </div>
+    </div>
+  );
 }
 
 // ===== COMMUNITY (Member Management & Roles) =====
