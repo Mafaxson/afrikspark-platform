@@ -201,26 +201,31 @@ export function BlogManagement() {
 
         // Send newsletter if post is published
         if (formData.is_published) {
+          console.log("Calling newsletter function...");
           try {
+            const title = formData.title;
+            const excerpt = formData.excerpt;
+
             const response = await fetch("https://flrnlsceusewzphbyugq.supabase.co/functions/v1/send-newsletter", {
               method: "POST",
               headers: {
                 "Content-Type": "application/json"
               },
               body: JSON.stringify({
-                title: formData.title,
+                title,
                 slug,
-                excerpt: formData.excerpt
+                excerpt
               })
             });
 
+            const result = await response.json();
+
+            console.log("Newsletter result:", result);
+
             if (response.ok) {
-              const result = await response.json();
-              console.log("Newsletter sent successfully:", result);
               toast.success(`Newsletter sent to ${result.emails_sent} subscribers`);
             } else {
-              const error = await response.json();
-              console.error("Failed to send newsletter:", error);
+              console.error("Failed to send newsletter:", result);
               toast.error("Post created but newsletter failed to send");
             }
           } catch (error) {
@@ -290,27 +295,31 @@ export function BlogManagement() {
 
       // Send newsletter if post is published
       if (formData.is_published) {
-        console.log("Sending newsletter...");
+        console.log("Calling newsletter function...");
         try {
+          const title = formData.title;
+          const excerpt = formData.excerpt;
+
           const response = await fetch("https://flrnlsceusewzphbyugq.supabase.co/functions/v1/send-newsletter", {
             method: "POST",
             headers: {
               "Content-Type": "application/json"
             },
             body: JSON.stringify({
-              title: formData.title,
+              title,
               slug,
-              excerpt: formData.excerpt
+              excerpt
             })
           });
 
+          const result = await response.json();
+
+          console.log("Newsletter result:", result);
+
           if (response.ok) {
-            const result = await response.json();
-            console.log("Newsletter sent successfully:", result);
             toast.success(`Newsletter sent to ${result.emails_sent} subscribers`);
           } else {
-            const error = await response.json();
-            console.error("Failed to send newsletter:", error);
+            console.error("Failed to send newsletter:", result);
             toast.error("Post created but newsletter failed to send");
           }
         } catch (error) {
