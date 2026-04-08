@@ -240,35 +240,88 @@ export function BlogManagement() {
   };
 
   const handleCreatePost = async () => {
+    console.log("Create Post button clicked");
+    console.log("Form data:", formData);
+
     if (!formData.title || !formData.content) {
+      console.log("Missing required fields");
       toast.error("Please fill in all required fields");
       return;
     }
 
     setCreating(true);
     try {
-      const { error } = await supabase.from("blog_posts").insert({
+      const slug = generateSlug(formData.title);
+      const readingTime = calculateReadingTime(formData.content);
+      const tagsArray = formData.tags
+        .split(",")
+        .map((tag) => tag.trim())
+        .filter(Boolean);
+
+      const postData = {
         title: formData.title,
-        slug: generateSlug(formData.title),
+        slug,
         content: formData.content,
         excerpt: formData.excerpt,
+        cover_image: formData.cover_image,
         media_type: formData.media_type,
         media_url: formData.media_url,
         video_url: formData.video_url,
         author: formData.author,
+        tags: tagsArray,
         is_published: formData.is_published,
-        published_at: formData.is_published ? new Date() : null
-      });
+        published_at: formData.is_published ? new Date().toISOString() : null,
+        reading_time: readingTime,
+        author_id: user?.id,
+      };
+
+      console.log("Post data to insert:", postData);
+
+      const { data, error } = await supabase.from("blog_posts").insert(postData).select();
 
       if (error) {
-        console.error(error);
-        toast.error("Failed to create post");
-      } else {
-        toast.success("Post created successfully");
-        resetForm();
-        setIsDialogOpen(false);
-        fetchPosts();
+        console.error("Database error:", error);
+        toast.error(`Failed to create post: ${error.message}`);
+        throw error;
       }
+
+      console.log("Post created successfully:", data);
+      toast.success("Post created successfully");
+
+      // Send newsletter if post is published
+      if (formData.is_published) {
+        console.log("Sending newsletter...");
+        try {
+          const response = await fetch("https://flrnlsceusewzphbyugq.supabase.co/functions/v1/send-newsletter", {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json"
+            },
+            body: JSON.stringify({
+              title: formData.title,
+              slug,
+              excerpt: formData.excerpt
+            })
+          });
+
+          if (response.ok) {
+            const result = await response.json();
+            console.log("Newsletter sent successfully:", result);
+            toast.success(`Newsletter sent to ${result.emails_sent} subscribers`);
+          } else {
+            const error = await response.json();
+            console.error("Failed to send newsletter:", error);
+            toast.error("Post created but newsletter failed to send");
+          }
+        } catch (error) {
+          console.error("Error sending newsletter:", error);
+          toast.error("Post created but newsletter failed to send");
+        }
+      }
+
+      resetForm();
+      setIsDialogOpen(false);
+      fetchPosts();
     } catch (error) {
       console.error("Error creating post:", error);
       toast.error("Failed to create post");
@@ -527,8 +580,15 @@ export function BlogManagement() {
                     Update Post
                   </Button>
                 ) : (
-                  <Button onClick={handleCreatePost} disabled={creating || uploading}>
-                    Create Post
+                  <Button
+                    type="button"
+                    onClick={(e) => {
+                      e.preventDefault();
+                      handleCreatePost();
+                    }}
+                    disabled={creating || uploading}
+                  >
+                    {creating ? "Creating..." : "Create Post"}
                   </Button>
                 )}
                 <Button type="button" variant="outline" onClick={() => setIsDialogOpen(false)}>
