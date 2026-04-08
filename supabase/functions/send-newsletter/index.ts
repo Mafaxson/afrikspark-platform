@@ -7,8 +7,9 @@ const corsHeaders = {
 };
 
 interface SendNewsletterRequest {
-  post_id?: string;
-  queue_id?: string;
+  title: string;
+  slug: string;
+  excerpt: string;
 }
 
 serve(async (req) => {
@@ -23,55 +24,31 @@ serve(async (req) => {
     );
 
     const payload: SendNewsletterRequest = await req.json();
-    const post_id = payload.post_id;
-    const queue_id = payload.queue_id;
+    const { title, slug, excerpt } = payload;
 
-    if (!post_id && !queue_id) {
-      throw new Error("Either post_id or queue_id is required");
+    if (!title || !slug || !excerpt) {
+      throw new Error("title, slug, and excerpt are required");
     }
 
-    // Fetch the blog post details
-    const { data: post, error: postError } = await supabaseClient
-      .from("blog_posts")
-      .select("*")
-      .eq("id", post_id)
-      .single();
-
-    if (postError || !post) {
-      throw new Error("Blog post not found");
-    }
-
-    // Only send if newsletter hasn't been sent yet (duplicate prevention)
-    if (post.newsletter_sent_at) {
-      return new Response(
-        JSON.stringify({
-          message: "Newsletter already sent for this post",
-          post_id: post.id,
-          sent_at: post.newsletter_sent_at,
-        }),
-        { headers: { ...corsHeaders, "Content-Type": "application/json" } }
-      );
-    }
-
-    // Get all active newsletter subscribers
+    // Fetch all emails from newsletter_subscribers
     const { data: subscribers, error: subscribersError } = await supabaseClient
       .from("newsletter_subscribers")
-      .select("email")
-      .eq("is_active", true);
+      .select("email");
 
     if (subscribersError) {
+      console.error("Error fetching subscribers:", subscribersError);
       throw subscribersError;
     }
 
     if (!subscribers || subscribers.length === 0) {
-      // Update newsletter_sent_at even with no subscribers
-      await supabaseClient
-        .from("blog_posts")
-        .update({ newsletter_sent_at: new Date().toISOString() })
-        .eq("id", post.id);
-
+      console.log("No subscribers found");
       return new Response(
-        JSON.stringify({ message: "No active subscribers found" }),
+        JSON.stringify({
+          message: "No subscribers found",
+          successCount: 0,
+          errorCount: 0,
+          totalSubscribers: 0
+        }),
         { headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
@@ -81,173 +58,78 @@ serve(async (req) => {
       throw new Error("RESEND_API_KEY environment variable not set");
     }
 
-    // Prepare newsletter content
-    const subject = `New Blog Post: ${post.title}`;
-    const excerpt =
-      post.excerpt ||
-      post.content.replace(/<[^>]*>/g, "").substring(0, 200) + "...";
-    const postUrl = `https://afrikspark.tech/blog/${post.slug}`;
+    // Prepare email content
+    const subject = title;
+    const postUrl = `https://afrikspark.tech/blog/${slug}`;
 
-    // HTML email template
     const htmlContent = `
-<!DOCTYPE html>
-<html>
-<head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <style>
-    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; line-height: 1.6; color: #333; }
-    .container { max-width: 600px; margin: 0 auto; padding: 20px; }
-    .header { background-color: #f97316; color: white; padding: 20px; border-radius: 8px 8px 0 0; text-align: center; }
-    .content { background-color: #f9fafb; padding: 30px; border-radius: 0 0 8px 8px; }
-    .title { font-size: 24px; font-weight: bold; margin: 15px 0; }
-    .excerpt { font-size: 16px; color: #666; margin: 15px 0; line-height: 1.6; }
-    .cta-button { display: inline-block; background-color: #f97316; color: white; padding: 12px 24px; text-decoration: none; border-radius: 6px; margin-top: 20px; font-weight: 600; }
-    .footer { margin-top: 30px; padding-top: 20px; border-top: 1px solid #e5e7eb; font-size: 12px; color: #999; text-align: center; }
-  </style>
-</head>
-<body>
-  <div class="container">
-    <div class="header">
-      <h2>AfrikSpark Blog</h2>
-    </div>
-    <div class="content">
-      <p>Hi there!</p>
-      <p>We just published a new blog post that you might find interesting:</p>
-      <div class="title">${post.title}</div>
-      <div class="excerpt">${excerpt}</div>
-      <a href="${postUrl}" class="cta-button">Read Full Post →</a>
-      <div class="footer">
-        <p>You're receiving this because you subscribed to the AfrikSpark newsletter.</p>
-        <p><a href="https://afrikspark.tech/unsubscribe" style="color: #999;">Unsubscribe</a></p>
-      </div>
-    </div>
-  </div>
-</body>
-</html>
+<h2>${title}</h2>
+<p>${excerpt}</p>
+<br/>
+<a href="${postUrl}" style="
+  padding:10px 20px;
+  background:black;
+  color:white;
+  text-decoration:none;
+  border-radius:5px;
+">
+  Read Full Article
+</a>
 `;
 
-    const plainTextContent = `
-Hi there!
+    // Extract emails into array
+    const emailList = subscribers.map(sub => sub.email);
 
-We just published a new blog post that you might find interesting:
+    // Send email using Resend API
+    const response = await fetch("https://api.resend.com/emails", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "Authorization": `Bearer ${resendApiKey}`,
+      },
+      body: JSON.stringify({
+        from: "AfrikSpark <info@afrikspark.tech>",
+        to: emailList,
+        subject: subject,
+        html: htmlContent,
+      }),
+    });
 
-${post.title}
-
-${excerpt}
-
-Read the full post: ${postUrl}
-
----
-Best regards,
-AfrikSpark Team
-
-To unsubscribe: https://afrikspark.tech/unsubscribe
-`;
-
-    // Send emails to all subscribers (in batches to avoid rate limits)
-    const batchSize = 50;
-    let successCount = 0;
-    let errorCount = 0;
-    const errors: string[] = [];
-
-    for (let i = 0; i < subscribers.length; i += batchSize) {
-      const batch = subscribers.slice(i, i + batchSize);
-
-      try {
-        const emailPromises = batch.map(async (subscriber) => {
-          try {
-            const response = await fetch("https://api.resend.com/emails", {
-              method: "POST",
-              headers: {
-                "Content-Type": "application/json",
-                "Authorization": `Bearer ${resendApiKey}`,
-              },
-              body: JSON.stringify({
-                from: "AfrikSpark <newsletter@afrikspark.tech>",
-                to: subscriber.email,
-                subject: subject,
-                html: htmlContent,
-                text: plainTextContent,
-                reply_to: "hello@afrikspark.tech",
-              }),
-            });
-
-            if (!response.ok) {
-              const error = await response.text();
-              throw new Error(
-                `Resend API error: ${response.status} - ${error}`
-              );
-            }
-
-            return { success: true };
-          } catch (error) {
-            errors.push(`Failed for ${subscriber.email}: ${error.message}`);
-            return { success: false, error: error.message };
-          }
-        });
-
-        const results = await Promise.allSettled(emailPromises);
-
-        results.forEach((result) => {
-          if (result.status === "fulfilled") {
-            if (result.value.success) {
-              successCount++;
-            } else {
-              errorCount++;
-            }
-          } else {
-            errorCount++;
-            errors.push(result.reason?.message || "Unknown error");
-          }
-        });
-
-        // Small delay between batches to avoid rate limits
-        if (i + batchSize < subscribers.length) {
-          await new Promise((resolve) => setTimeout(resolve, 500));
-        }
-      } catch (error) {
-        console.error("Error sending batch:", error);
-        errorCount += batch.length;
-        errors.push(`Batch error: ${error.message}`);
-      }
+    if (!response.ok) {
+      const error = await response.text();
+      console.error("Resend API error:", error);
+      throw new Error(`Resend API error: ${response.status} - ${error}`);
     }
 
-    // Mark as sent only if we had success
-    if (successCount > 0) {
-      const { error: updateError } = await supabaseClient
-        .from("blog_posts")
-        .update({ newsletter_sent_at: new Date().toISOString() })
-        .eq("id", post.id);
-
-      if (updateError) {
-        console.error("Error updating post newsletter_sent_at:", updateError);
-      }
-    }
-
-    // Update queue status if tracking
-    if (queue_id && successCount > 0) {
-      await supabaseClient
-        .from("newsletter_queue")
-        .update({
-          status: errorCount > 0 ? "failed" : "sent",
-          sent_count: successCount,
-          failed_count: errorCount,
-          last_error: errors.length > 0 ? errors.join("; ") : null,
-          sent_at: new Date().toISOString(),
-          updated_at: new Date().toISOString(),
-        })
-        .eq("id", queue_id);
-    }
+    const result = await response.json();
+    console.log("Email sent successfully:", result);
 
     return new Response(
       JSON.stringify({
         message: "Newsletter sent successfully",
-        post_id: post.id,
-        post_title: post.title,
-        successCount,
-        errorCount,
-        totalSubscribers: subscribers.length,
+        successCount: emailList.length,
+        errorCount: 0,
+        totalSubscribers: emailList.length,
+        title,
+        slug
+      }),
+      { headers: { ...corsHeaders, "Content-Type": "application/json" } }
+    );
+
+  } catch (error) {
+    console.error("Error in send-newsletter function:", error);
+    return new Response(
+      JSON.stringify({
+        error: error.message,
+        message: "Failed to send newsletter"
+      }),
+      {
+        status: 500,
+        headers: { ...corsHeaders, "Content-Type": "application/json" }
+      }
+    );
+  }
+});
         errors: errors.length > 0 ? errors : undefined,
       }),
       { headers: { ...corsHeaders, "Content-Type": "application/json" } }

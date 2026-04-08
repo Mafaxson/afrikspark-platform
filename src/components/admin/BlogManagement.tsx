@@ -198,6 +198,34 @@ export function BlogManagement() {
 
         if (error) throw error;
         toast.success("Post created successfully");
+
+        // Send newsletter if post is published
+        if (formData.is_published) {
+          try {
+            const response = await fetch("/functions/v1/send-newsletter", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({
+                title: formData.title,
+                slug,
+                excerpt: formData.excerpt
+              })
+            });
+
+            if (response.ok) {
+              const result = await response.json();
+              console.log("Newsletter sent successfully:", result);
+              toast.success(`Newsletter sent to ${result.totalSubscribers} subscribers`);
+            } else {
+              const error = await response.json();
+              console.error("Failed to send newsletter:", error);
+              toast.error("Post created but newsletter failed to send");
+            }
+          } catch (error) {
+            console.error("Error sending newsletter:", error);
+            toast.error("Post created but newsletter failed to send");
+          }
+        }
       }
 
       setIsDialogOpen(false);
