@@ -18,6 +18,8 @@ serve(async (req) => {
   }
 
   try {
+    console.log("Newsletter triggered");
+
     const supabaseClient = createClient(
       Deno.env.get("SUPABASE_URL") ?? "",
       Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? ""
@@ -26,78 +28,60 @@ serve(async (req) => {
     const payload: SendNewsletterRequest = await req.json();
     const { title, slug, excerpt } = payload;
 
-    if (!title || !slug || !excerpt) {
-      throw new Error("title, slug, and excerpt are required");
-    }
-
     // Fetch all emails from newsletter_subscribers
     const { data: subscribers, error: subscribersError } = await supabaseClient
       .from("newsletter_subscribers")
       .select("email");
 
     if (subscribersError) {
-      console.error("Error fetching subscribers:", subscribersError);
       throw subscribersError;
     }
 
+    console.log("Subscribers:", subscribers);
+
     if (!subscribers || subscribers.length === 0) {
-      console.log("No subscribers found");
       return new Response(
         JSON.stringify({
-          message: "No subscribers found",
-          successCount: 0,
-          errorCount: 0,
-          totalSubscribers: 0
+          success: true,
+          emails_sent: 0
         }),
         { headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
+
+    // Extract email list
+    const emails = subscribers.map(sub => sub.email);
+    console.log("Sending to:", emails);
 
     const resendApiKey = Deno.env.get("RESEND_API_KEY");
     if (!resendApiKey) {
       throw new Error("RESEND_API_KEY environment variable not set");
     }
 
-    // Prepare email content
-    const subject = title;
-    const postUrl = `https://afrikspark.tech/blog/${slug}`;
-
-    const htmlContent = `
-<h2>${title}</h2>
-<p>${excerpt}</p>
-<br/>
-<a href="${postUrl}" style="
-  padding:10px 20px;
-  background:black;
-  color:white;
-  text-decoration:none;
-  border-radius:5px;
-">
-  Read Full Article
-</a>
-`;
-
-    // Extract emails into array
-    const emailList = subscribers.map(sub => sub.email);
-
-    // Send email using Resend API
+    // Send email using Resend
     const response = await fetch("https://api.resend.com/emails", {
       method: "POST",
       headers: {
-        "Content-Type": "application/json",
         "Authorization": `Bearer ${resendApiKey}`,
+        "Content-Type": "application/json",
       },
       body: JSON.stringify({
         from: "AfrikSpark <info@afrikspark.tech>",
-        to: emailList,
-        subject: subject,
-        html: htmlContent,
+        to: emails,
+        subject: title,
+        html: `
+          <h2>${title}</h2>
+          <p>${excerpt}</p>
+          <br/>
+          <a href="https://afrikspark.tech/blog/${slug}">
+            Read Full Article
+          </a>
+        `,
       }),
     });
 
     if (!response.ok) {
       const error = await response.text();
-      console.error("Resend API error:", error);
       throw new Error(`Resend API error: ${response.status} - ${error}`);
     }
 
@@ -106,12 +90,8 @@ serve(async (req) => {
 
     return new Response(
       JSON.stringify({
-        message: "Newsletter sent successfully",
-        successCount: emailList.length,
-        errorCount: 0,
-        totalSubscribers: emailList.length,
-        title,
-        slug
+        success: true,
+        emails_sent: emails.length
       }),
       { headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
@@ -120,8 +100,8 @@ serve(async (req) => {
     console.error("Error in send-newsletter function:", error);
     return new Response(
       JSON.stringify({
-        error: error.message,
-        message: "Failed to send newsletter"
+        success: false,
+        error: error.message
       }),
       {
         status: 500,

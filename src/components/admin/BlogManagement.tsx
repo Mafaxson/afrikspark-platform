@@ -202,9 +202,11 @@ export function BlogManagement() {
         // Send newsletter if post is published
         if (formData.is_published) {
           try {
-            const response = await fetch("/functions/v1/send-newsletter", {
+            const response = await fetch("https://flrnlsceusewzphbyugq.supabase.co/functions/v1/send-newsletter", {
               method: "POST",
-              headers: { "Content-Type": "application/json" },
+              headers: {
+                "Content-Type": "application/json"
+              },
               body: JSON.stringify({
                 title: formData.title,
                 slug,
@@ -215,7 +217,7 @@ export function BlogManagement() {
             if (response.ok) {
               const result = await response.json();
               console.log("Newsletter sent successfully:", result);
-              toast.success(`Newsletter sent to ${result.totalSubscribers} subscribers`);
+              toast.success(`Newsletter sent to ${result.emails_sent} subscribers`);
             } else {
               const error = await response.json();
               console.error("Failed to send newsletter:", error);
