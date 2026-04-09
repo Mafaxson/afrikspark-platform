@@ -17,7 +17,7 @@ const services = [
 ];
 
 const stats = [
-  { value: "50+", label: "Youth Trained" },
+  { value: "500+", label: "Youth Trained" },
   { value: "200+", label: "Students Developed" },
   { value: "1000+", label: "Community Members" },
   { value: "3+", label: "Innovation Projects" },
