@@ -1,5 +1,5 @@
 import { Link } from "react-router-dom";
-import { Mail, MapPin, Phone, Instagram, Facebook, Twitter, Youtube, Linkedin, MessageCircle } from "lucide-react";
+import { Mail, MapPin, Phone, Instagram, Facebook, Twitter, Youtube, Linkedin, MessageCircle, Music } from "lucide-react";
 import logo from "@/assets/afrikspark-logo.jpeg";
 
 const footerLinks = {
@@ -94,6 +94,9 @@ export function Footer() {
             </a>
             <a href="https://wa.me/23277299080" target="_blank" rel="noopener noreferrer">
               <MessageCircle className="text-xl text-background/60 hover:text-green-500 hover:scale-110 transition" />
+            </a>
+            <a href="https://www.tiktok.com/@africksparktechsolutions?" target="_blank" rel="noopener noreferrer">
+              <Music className="text-xl text-background/60 hover:text-black dark:hover:text-white hover:scale-110 transition" />
             </a>
           </div>
         </div>
