@@ -2,3 +2,8 @@ export { RelatedArticles } from './RelatedArticles';
 export { NewsletterSubscription } from './NewsletterSubscription';
 export { SocialShare } from './SocialShare';
 export { PopupNewsletter } from './PopupNewsletter';
+export { BlogCard } from './BlogCard';
+export { BlogDetailHeader } from './BlogDetailHeader';
+export { VideoEmbed } from './VideoEmbed';
+export { KeyFocusAreas } from './KeyFocusAreas';
+export { BlogTags } from './BlogTags';
