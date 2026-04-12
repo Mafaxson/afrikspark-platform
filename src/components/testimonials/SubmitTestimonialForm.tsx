@@ -97,6 +97,8 @@ export const SubmitTestimonialForm = () => {
       }
 
       const source = await getTestimonialSource();
+      console.log(`Submitting testimonial to ${source} table`, { name: data.name, role: data.role });
+
       const payload =
         source === "testimonials"
           ? {
@@ -120,10 +122,20 @@ export const SubmitTestimonialForm = () => {
               approved: false,
             };
 
-      const { error } = await supabase.from(source).insert(payload);
+      console.log(`Inserting payload:`, payload);
 
-      if (error) throw error;
+      const { data: insertedData, error } = await supabase.from(source).insert(payload).select();
 
+      if (error) {
+        console.error("Insert error details:", {
+          status: error.status,
+          message: error.message,
+          details: error.details,
+        });
+        throw error;
+      }
+
+      console.log("Testimonial inserted successfully:", insertedData);
       toast.success("Thank you! Your testimonial has been submitted for review.");
       reset();
       setImageFile(null);
@@ -140,7 +152,11 @@ export const SubmitTestimonialForm = () => {
       });
     } catch (error: unknown) {
       console.error("Error submitting testimonial:", error);
-      toast.error("Failed to submit testimonial. Please try again.");
+      if (error instanceof Error) {
+        toast.error("Failed to submit testimonial: " + error.message);
+      } else {
+        toast.error("Failed to submit testimonial. Please try again.");
+      }
     } finally {
       setUploading(false);
     }

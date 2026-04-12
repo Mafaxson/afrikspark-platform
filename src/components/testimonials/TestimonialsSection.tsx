@@ -33,12 +33,18 @@ export const TestimonialsSection = () => {
         ? query.eq("status", "active")
         : query.or("status.eq.active,approved.eq.true");
 
+    console.log(`Fetching featured testimonials from ${source}`);
+
     const { data, error } = await activeQuery
       .eq(source === "testimonials" ? "is_featured" : "featured", true)
       .limit(6);
 
     if (error) {
-      console.error("Failed to load featured testimonials:", error);
+      console.error("Failed to load featured testimonials:", {
+        status: error.status,
+        message: error.message,
+        source,
+      });
       // If it's a 404 and we're still trying testimonials, clear cache and retry
       if (error.status === 404 && source === "testimonials") {
         clearTestimonialSourceCache();
@@ -54,6 +60,8 @@ export const TestimonialsSection = () => {
             .eq(retrySource === "testimonials" ? "is_featured" : "featured", true)
             .limit(6);
 
+          console.log(`Retry successful from ${retrySource}:`, retryData?.length ?? 0, "featured testimonials", retryError);
+
           if (!retryError && retryData) {
             setTestimonials(retryData.map((row: Record<string, unknown>) => normalizeTestimonialRow(row, retrySource)));
           }
@@ -62,6 +70,8 @@ export const TestimonialsSection = () => {
       setLoading(false);
       return;
     }
+
+    console.log(`Loaded ${data?.length ?? 0} featured testimonials from ${source}`);
 
     if (data) {
       setTestimonials(data.map((row: Record<string, unknown>) => normalizeTestimonialRow(row, source)));

@@ -65,18 +65,35 @@ export const TestimonialManagement = () => {
 
       const select = buildTestimonialSelect(source);
 
+      // Build query - for admin, fetch ALL testimonials (RLS will handle visibility)
       let query = supabase.from(source).select(select).order("created_at", { ascending: false });
 
+      // DEBUG: Log what we're querying
+      console.log(`Fetching testimonials from table: ${source}`);
+      console.log(`Filter: ${filter}`);
+
+      // Only apply filter if specific status is selected
       if (filter !== "all") {
         query = query.eq("status", filter);
+        console.log(`Applied status filter: ${filter}`);
       }
 
       const { data, error } = await query;
 
+      // DEBUG: Log result
       if (error) {
-        console.error("Failed to load testimonials:", error);
+        console.error("Failed to load testimonials - Error details:", {
+          status: error.status,
+          message: error.message,
+          details: error.details,
+        });
+      }
+      console.log(`Fetched ${data?.length ?? 0} testimonials from ${source}`);
+
+      if (error) {
         // If it's a 404 and we're still trying testimonials, clear cache and retry
         if (error.status === 404 && source === "testimonials") {
+          console.log("testimonials table not found, clearing cache and retrying...");
           clearTestimonialSourceCache();
           const retrySource = await getTestimonialSource();
           setMigrationNeeded(retrySource === "testimonies");
@@ -89,19 +106,22 @@ export const TestimonialManagement = () => {
               retryQuery = retryQuery.eq("status", filter);
             }
 
-            const { data: retryData } = await retryQuery;
+            const { data: retryData, error: retryError } = await retryQuery;
+            console.log(`Retry fetch from ${retrySource}: ${retryData?.length ?? 0} testimonials`, retryError);
             if (retryData) {
               setTestimonials(retryData.map((row: Record<string, unknown>) => normalizeTestimonialRow(row, retrySource)));
             }
           }
         } else {
-          toast.error("Failed to load testimonials");
+          toast.error("Failed to load testimonials: " + error.message);
         }
         setLoading(false);
         return;
       }
 
-      setTestimonials((data ?? []).map((row: Record<string, unknown>) => normalizeTestimonialRow(row, source)));
+      const normalized = (data ?? []).map((row: Record<string, unknown>) => normalizeTestimonialRow(row, source));
+      console.log(`Normalized ${normalized.length} testimonials:`, normalized);
+      setTestimonials(normalized);
     } catch (err) {
       console.error("Unexpected error loading testimonials:", err);
       toast.error("Failed to load testimonials");
@@ -146,6 +166,8 @@ export const TestimonialManagement = () => {
       return;
     }
 
+    console.log(`Saving testimonial to ${source}:`, { isNew: !testimonial.id, payload });
+
     if (testimonial.id) {
       const { error } = await supabase
         .from(source)
@@ -153,17 +175,22 @@ export const TestimonialManagement = () => {
         .eq("id", testimonial.id);
 
       if (error) {
-        toast.error("Failed to update testimonial");
+        console.error("Failed to update testimonial:", { status: error.status, message: error.message, details: error.details });
+        toast.error("Failed to update testimonial: " + error.message);
         return;
       }
 
+      console.log(`Successfully updated testimonial ${testimonial.id}`);
       toast.success("Testimonial updated");
     } else {
-      const { error } = await supabase.from(source).insert(payload);
+      const { data, error } = await supabase.from(source).insert(payload).select();
       if (error) {
-        toast.error("Failed to create testimonial");
+        console.error("Failed to create testimonial:", { status: error.status, message: error.message, details: error.details });
+        toast.error("Failed to create testimonial: " + error.message);
         return;
       }
+
+      console.log(`Successfully created testimonial:`, data);
       toast.success("Testimonial created");
     }
 

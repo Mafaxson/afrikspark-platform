@@ -100,6 +100,12 @@ const Testimonials = () => {
       );
     }
 
+    console.log(`Building query from ${source} for active testimonials with filters:`, {
+      category: selectedCategory,
+      cohort: selectedCohort,
+      search: searchQuery,
+    });
+
     return { query, source };
   };
 
@@ -117,10 +123,17 @@ const Testimonials = () => {
       const from = nextPage * PAGE_SIZE;
 
       const { query, source } = await buildQuery();
+      console.log(`Fetching page ${nextPage} (rows ${from}-${from + PAGE_SIZE - 1}) from ${source}`);
+      
       const { data, error } = await query.range(from, from + PAGE_SIZE - 1);
 
       if (error) {
-        console.error("Failed to load testimonials:", error);
+        console.error("Failed to load testimonials - Error:", {
+          status: error.status,
+          message: error.message,
+          source,
+          page: nextPage,
+        });
         // If it's a 404 and we're still trying testimonials, clear cache and retry
         if (error.status === 404 && source === "testimonials") {
           clearTestimonialSourceCache(); // Clear cache to force re-detection
@@ -133,6 +146,7 @@ const Testimonials = () => {
               : retryQuery.or("status.eq.active,approved.eq.true");
 
             const { data: retryData, error: retryError } = await activeRetryQuery.range(from, from + PAGE_SIZE - 1);
+            console.log(`Retry successful with ${retrySource}:`, retryData?.length ?? 0, "results", retryError);
             if (!retryError && retryData) {
               setTestimonials((prev) => (reset
                 ? retryData.map((row: Record<string, unknown>) => normalizeTestimonialRow(row, retrySource))
@@ -148,6 +162,7 @@ const Testimonials = () => {
       }
 
       const fetched = (data ?? []).map((row: Record<string, unknown>) => normalizeTestimonialRow(row, source));
+      console.log(`Loaded ${fetched.length} testimonials from page ${nextPage}`);
 
       setTestimonials((prev) => (reset ? fetched : [...prev, ...fetched]));
       setHasMore(fetched.length === PAGE_SIZE);
