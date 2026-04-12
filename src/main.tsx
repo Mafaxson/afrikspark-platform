@@ -2,6 +2,7 @@ import { createRoot } from "react-dom/client";
 import { HelmetProvider } from "react-helmet-async";
 import App from "./App.tsx";
 import "./index.css";
+import { initNetworkDetection } from "@/lib/networkDetection";
 
 function showFatalError(message: string) {
   const root = document.getElementById("root");
@@ -24,6 +25,9 @@ window.addEventListener("error", (event) => {
 window.addEventListener("unhandledrejection", (event) => {
   showFatalError(event.reason?.stack || event.reason || String(event));
 });
+
+// Initialize network detection for performance optimization
+initNetworkDetection();
 
 createRoot(document.getElementById("root")!).render(
   <HelmetProvider>
