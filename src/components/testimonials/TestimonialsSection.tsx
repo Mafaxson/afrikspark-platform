@@ -28,14 +28,11 @@ export const TestimonialsSection = () => {
 
     const query = supabase.from(source).select(select).order("created_at", { ascending: false });
 
-    const activeQuery =
-      source === "testimonials"
-        ? query.eq("status", "active")
-        : query.or("status.eq.active,approved.eq.true");
-
+    // REMOVED status filtering - now fetch ALL testimonials
+    // Just get featured ones
     console.log(`Fetching featured testimonials from ${source}`);
 
-    const { data, error } = await activeQuery
+    const { data, error } = await query
       .eq(source === "testimonials" ? "is_featured" : "featured", true)
       .limit(6);
 
@@ -52,11 +49,8 @@ export const TestimonialsSection = () => {
         if (retrySource !== source) {
           const retrySelect = buildTestimonialSelect(retrySource);
           const retryQuery = supabase.from(retrySource).select(retrySelect).order("created_at", { ascending: false });
-          const retryActiveQuery = retrySource === "testimonials"
-            ? retryQuery.eq("status", "active")
-            : retryQuery.or("status.eq.active,approved.eq.true");
 
-          const { data: retryData, error: retryError } = await retryActiveQuery
+          const { data: retryData, error: retryError } = await retryQuery
             .eq(retrySource === "testimonials" ? "is_featured" : "featured", true)
             .limit(6);
 

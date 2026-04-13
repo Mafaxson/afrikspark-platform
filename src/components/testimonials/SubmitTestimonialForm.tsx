@@ -109,7 +109,7 @@ export const SubmitTestimonialForm = () => {
               testimonial_text: data.testimonial_text.trim(),
               video_url: data.video_url?.trim() || null,
               is_featured: false,
-              status: "hidden",
+              status: "active", // Changed from "hidden" to "active" so it appears immediately
             }
           : {
               name: data.name.trim(),
@@ -118,8 +118,8 @@ export const SubmitTestimonialForm = () => {
               image_url: photoUrl,
               testimony: data.testimonial_text.trim(),
               video_url: data.video_url?.trim() || null,
-              featured: false,
-              approved: false,
+              featured: true, // Changed from false to true for legacy table
+              approved: true, // Changed from false to true for legacy table
             };
 
       console.log(`Inserting payload:`, payload);

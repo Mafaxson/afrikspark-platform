@@ -79,10 +79,12 @@ const Testimonials = () => {
       .select(select)
       .order("created_at", { ascending: false });
 
-    query =
-      source === "testimonials"
-        ? query.eq("status", "active")
-        : query.or("status.eq.active,approved.eq.true");
+    // REMOVED status filtering - now fetch ALL testimonials
+    console.log(`Building query from ${source} for testimonials with filters:`, {
+      category: selectedCategory,
+      cohort: selectedCohort,
+      search: searchQuery,
+    });
 
     if (selectedCategory !== "all") {
       query = query.eq("role", selectedCategory);
@@ -99,12 +101,6 @@ const Testimonials = () => {
         `name.ilike.%${escaped}%,${testimonialField}.ilike.%${escaped}%,organization.ilike.%${escaped}%`,
       );
     }
-
-    console.log(`Building query from ${source} for active testimonials with filters:`, {
-      category: selectedCategory,
-      cohort: selectedCohort,
-      search: searchQuery,
-    });
 
     return { query, source };
   };
