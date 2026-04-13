@@ -62,7 +62,7 @@ const Testimonials = () => {
   const [selectedTestimonial, setSelectedTestimonial] = useState<Testimonial | null>(null);
 
   const uniqueCohorts = useMemo(
-    () => Array.from(new Set(testimonials.map((t) => t.cohort).filter(Boolean))),
+    () => Array.from(new Set(testimonials.map((t) => t.cohort).filter(Boolean))).sort(),
     [testimonials],
   );
 
