@@ -71,38 +71,18 @@ const Testimonials = () => {
   }, [selectedCategory, selectedCohort, searchQuery]);
 
   const buildQuery = async () => {
-    const source = await getTestimonialSource();
-    const select = buildTestimonialSelect(source);
+    const select = buildTestimonialSelect("testimonials");
 
+    // Only fetch approved testimonials for public view
     let query = supabase
-      .from(source)
+      .from("testimonials")
       .select(select)
+      .eq("status", "approved")
       .order("created_at", { ascending: false });
 
-    // REMOVED status filtering - now fetch ALL testimonials
-    console.log(`Building query from ${source} for testimonials with filters:`, {
-      category: selectedCategory,
-      cohort: selectedCohort,
-      search: searchQuery,
-    });
+    console.log(`Building query for approved testimonials`);
 
-    if (selectedCategory !== "all") {
-      query = query.eq("role", selectedCategory);
-    }
-
-    if (selectedCohort !== "all") {
-      query = query.eq("cohort", selectedCohort);
-    }
-
-    if (searchQuery.trim()) {
-      const escaped = searchQuery.replace(/'/g, "''");
-      const testimonialField = source === "testimonials" ? "testimonial_text" : "testimony";
-      query = query.or(
-        `name.ilike.%${escaped}%,${testimonialField}.ilike.%${escaped}%,organization.ilike.%${escaped}%`,
-      );
-    }
-
-    return { query, source };
+    return { query };
   };
 
   const loadTestimonials = async (reset = false) => {
@@ -118,47 +98,38 @@ const Testimonials = () => {
       const nextPage = reset ? 0 : page;
       const from = nextPage * PAGE_SIZE;
 
-      const { query, source } = await buildQuery();
-      console.log(`Fetching page ${nextPage} (rows ${from}-${from + PAGE_SIZE - 1}) from ${source}`);
+      const { query } = await buildQuery();
       
+      console.log(`Fetching approved testimonials, page ${nextPage}, rows ${from}-${from + PAGE_SIZE - 1}`);
+
       const { data, error } = await query.range(from, from + PAGE_SIZE - 1);
 
       if (error) {
-        console.error("Failed to load testimonials - Error:", {
-          status: error.status,
-          message: error.message,
-          source,
-          page: nextPage,
-        });
-        // If it's a 404 and we're still trying testimonials, clear cache and retry
-        if (error.status === 404 && source === "testimonials") {
-          clearTestimonialSourceCache(); // Clear cache to force re-detection
-          const retrySource = await getTestimonialSource();
-          if (retrySource !== source) {
-            // Retry with the correct source
-            const retryQuery = supabase.from(retrySource).select(buildTestimonialSelect(retrySource)).order("created_at", { ascending: false });
-            const activeRetryQuery = retrySource === "testimonials"
-              ? retryQuery.eq("status", "active")
-              : retryQuery.or("status.eq.active,approved.eq.true");
-
-            const { data: retryData, error: retryError } = await activeRetryQuery.range(from, from + PAGE_SIZE - 1);
-            console.log(`Retry successful with ${retrySource}:`, retryData?.length ?? 0, "results", retryError);
-            if (!retryError && retryData) {
-              setTestimonials((prev) => (reset
-                ? retryData.map((row: Record<string, unknown>) => normalizeTestimonialRow(row, retrySource))
-                : [...prev, ...retryData.map((row: Record<string, unknown>) => normalizeTestimonialRow(row, retrySource))
-              ]));
-              setHasMore(retryData.length === PAGE_SIZE);
-            }
-          }
-        }
+        console.error("Fetch error:", error);
         setLoading(false);
         setLoadingMore(false);
         return;
       }
 
-      const fetched = (data ?? []).map((row: Record<string, unknown>) => normalizeTestimonialRow(row, source));
-      console.log(`Loaded ${fetched.length} testimonials from page ${nextPage}`);
+      let fetched = (data ?? []).map((row: Record<string, unknown>) => normalizeTestimonialRow(row, "testimonials"));
+      
+      // Apply client-side filtering for category
+      if (selectedCategory !== "all") {
+        fetched = fetched.filter(t => t.role === selectedCategory);
+      }
+      if (selectedCohort !== "all") {
+        fetched = fetched.filter(t => t.cohort === selectedCohort);
+      }
+      if (searchQuery.trim()) {
+        const q = searchQuery.toLowerCase();
+        fetched = fetched.filter(t => 
+          t.name.toLowerCase().includes(q) ||
+          t.testimonial_text.toLowerCase().includes(q) ||
+          t.organization?.toLowerCase().includes(q)
+        );
+      }
+
+      console.log(`Loaded ${fetched.length} testimonials`);
 
       setTestimonials((prev) => (reset ? fetched : [...prev, ...fetched]));
       setHasMore(fetched.length === PAGE_SIZE);
@@ -167,7 +138,7 @@ const Testimonials = () => {
       if (reset) setPage(1);
       else setPage((prev) => prev + 1);
     } catch (err) {
-      console.error("Unexpected error loading testimonials:", err);
+      console.error("Unexpected error:", err);
       setLoading(false);
       setLoadingMore(false);
     }

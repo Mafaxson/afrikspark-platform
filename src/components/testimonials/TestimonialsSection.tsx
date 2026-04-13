@@ -23,54 +23,35 @@ export const TestimonialsSection = () => {
   }, []);
 
   const fetchTestimonials = async () => {
-    const source = await getTestimonialSource();
-    const select = buildTestimonialSelect(source);
+    try {
+      const source = await getTestimonialSource();
+      const select = buildTestimonialSelect(source);
 
-    const query = supabase.from(source).select(select).order("created_at", { ascending: false });
+      // Simple query - no filters, no status checking
+      const { data, error } = await supabase
+        .from(source)
+        .select(select)
+        .order("created_at", { ascending: false })
+        .limit(6);
 
-    // REMOVED status filtering - now fetch ALL testimonials
-    // Just get featured ones
-    console.log(`Fetching featured testimonials from ${source}`);
+      console.log(`Fetching testimonials from ${source}`);
 
-    const { data, error } = await query
-      .eq(source === "testimonials" ? "is_featured" : "featured", true)
-      .limit(6);
+      if (error) {
+        console.error("Failed to load testimonials:", error);
+        setLoading(false);
+        return;
+      }
 
-    if (error) {
-      console.error("Failed to load featured testimonials:", {
-        status: error.status,
-        message: error.message,
-        source,
-      });
-      // If it's a 404 and we're still trying testimonials, clear cache and retry
-      if (error.status === 404 && source === "testimonials") {
-        clearTestimonialSourceCache();
-        const retrySource = await getTestimonialSource();
-        if (retrySource !== source) {
-          const retrySelect = buildTestimonialSelect(retrySource);
-          const retryQuery = supabase.from(retrySource).select(retrySelect).order("created_at", { ascending: false });
+      console.log(`Loaded ${data?.length ?? 0} testimonials`, data);
 
-          const { data: retryData, error: retryError } = await retryQuery
-            .eq(retrySource === "testimonials" ? "is_featured" : "featured", true)
-            .limit(6);
-
-          console.log(`Retry successful from ${retrySource}:`, retryData?.length ?? 0, "featured testimonials", retryError);
-
-          if (!retryError && retryData) {
-            setTestimonials(retryData.map((row: Record<string, unknown>) => normalizeTestimonialRow(row, retrySource)));
-          }
-        }
+      if (data) {
+        setTestimonials(data.map((row: Record<string, unknown>) => normalizeTestimonialRow(row, source)));
       }
       setLoading(false);
-      return;
+    } catch (err) {
+      console.error("Unexpected error:", err);
+      setLoading(false);
     }
-
-    console.log(`Loaded ${data?.length ?? 0} featured testimonials from ${source}`);
-
-    if (data) {
-      setTestimonials(data.map((row: Record<string, unknown>) => normalizeTestimonialRow(row, source)));
-    }
-    setLoading(false);
   };
 
   const nextTestimonial = () => {

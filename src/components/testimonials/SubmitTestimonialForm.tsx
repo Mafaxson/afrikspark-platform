@@ -3,7 +3,6 @@ import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import * as z from "zod";
 import { supabase } from "@/integrations/supabase/client";
-import { getTestimonialSource } from "@/lib/testimonials";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -69,93 +68,72 @@ export const SubmitTestimonialForm = () => {
     if (!imageFile) return null;
 
     const fileExt = imageFile.name.split(".").pop();
-    const fileName = `${Math.random().toString(36).substring(2)}-${Date.now()}.${fileExt}`;
-    const filePath = `${fileName}`;
+    const timestamp = Date.now();
+    const fileName = `${timestamp}-${imageFile.name.split(".")[0]}.${fileExt}`;
+    const filePath = `testimonials/${fileName}`;
 
-    const { error: uploadError } = await supabase.storage
-      .from("testimony-media")
-      .upload(filePath, imageFile);
+    try {
+      const { error: uploadError } = await supabase.storage
+        .from("testimonials")
+        .upload(filePath, imageFile);
 
-    if (uploadError) {
-      throw uploadError;
+      if (uploadError) {
+        throw uploadError;
+      }
+
+      const { data: { publicUrl } } = supabase.storage
+        .from("testimonials")
+        .getPublicUrl(filePath);
+
+      return publicUrl;
+    } catch (error) {
+      console.error("Image upload failed:", error);
+      throw new Error("Failed to upload image. Please try again.");
     }
-
-    const { data: { publicUrl } } = supabase.storage
-      .from("testimony-media")
-      .getPublicUrl(filePath);
-
-    return publicUrl;
   };
 
   const onSubmit = async (data: TestimonialFormData) => {
     try {
       setUploading(true);
 
-      let photoUrl: string | null = data.photo_url?.trim() || null;
+      // Upload image if provided
+      let photoUrl: string | null = null;
       if (imageFile) {
         photoUrl = await uploadImage();
       }
 
-      const source = await getTestimonialSource();
-      console.log(`Submitting testimonial to ${source} table`, { name: data.name, role: data.role });
+      const payload = {
+        name: data.name.trim(),
+        role: data.role,
+        organization: data.organization?.trim() || null,
+        photo_url: photoUrl,
+        testimonial_text: data.testimonial_text.trim(),
+        video_url: data.video_url?.trim() || null,
+        is_featured: false,
+        status: "pending", // Default to pending for moderation
+      };
 
-      const payload =
-        source === "testimonials"
-          ? {
-              name: data.name.trim(),
-              role: data.role,
-              organization: data.organization?.trim() || null,
-              photo_url: photoUrl,
-              testimonial_text: data.testimonial_text.trim(),
-              video_url: data.video_url?.trim() || null,
-              is_featured: false,
-              status: "active", // Changed from "hidden" to "active" so it appears immediately
-            }
-          : {
-              name: data.name.trim(),
-              role: data.role,
-              organization: data.organization?.trim() || null,
-              image_url: photoUrl,
-              testimony: data.testimonial_text.trim(),
-              video_url: data.video_url?.trim() || null,
-              featured: true, // Changed from false to true for legacy table
-              approved: true, // Changed from false to true for legacy table
-            };
+      console.log("Submitting testimonial:", payload);
 
-      console.log(`Inserting payload:`, payload);
-
-      const { data: insertedData, error } = await supabase.from(source).insert(payload).select();
+      const { error } = await supabase.from("testimonials").insert(payload);
 
       if (error) {
-        console.error("Insert error details:", {
-          status: error.status,
-          message: error.message,
-          details: error.details,
-        });
+        console.error("Insert failed:", error);
         throw error;
       }
 
-      console.log("Testimonial inserted successfully:", insertedData);
-      toast.success("Thank you! Your testimonial has been submitted for review.");
+      console.log("✓ Testimonial submitted successfully");
+      toast.success("Thank you! Your testimonial has been submitted and is pending approval.");
       reset();
       setImageFile(null);
       setImagePreview(null);
 
-      // Notify admin (don't wait for this)
-      supabase.functions.invoke("send-notification", {
-        body: {
-          type: "testimonial",
-          data: { name: data.name, message: data.testimonial_text },
-        },
-      }).catch((emailError) => {
-        console.error("Failed to send admin notification:", emailError);
-      });
     } catch (error: unknown) {
-      console.error("Error submitting testimonial:", error);
+      console.error("Error:", error);
       if (error instanceof Error) {
-        toast.error("Failed to submit testimonial: " + error.message);
+        toast.error("Failed: " + error.message);
       } else {
-        toast.error("Failed to submit testimonial. Please try again.");
+        toast.error("Failed to submit testimonial");
       }
     } finally {
       setUploading(false);

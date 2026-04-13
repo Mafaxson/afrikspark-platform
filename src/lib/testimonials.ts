@@ -11,9 +11,9 @@ export type NormalizedTestimonial = {
   testimonial_text: string;
   video_url: string | null;
   is_featured: boolean;
-  status: "active" | "hidden";
-  cohort?: string | null;
+  status: "pending" | "approved" | "rejected";
   created_at?: string | null;
+  updated_at?: string | null;
 };
 
 let cachedSource: TestimonialSource | null = null;
@@ -22,8 +22,7 @@ export async function getTestimonialSource(): Promise<TestimonialSource> {
   if (cachedSource) return cachedSource;
 
   try {
-    // If the new `testimonials` table does not exist, the REST API returns 404.
-    // Fallback to legacy `testimonies` table so the app continues to work without a migration.
+    // Try the new testimonials table first
     const { error } = await supabase.from("testimonials").select("id").limit(1).single();
     if (error?.status === 404) {
       cachedSource = "testimonies";
@@ -31,8 +30,7 @@ export async function getTestimonialSource(): Promise<TestimonialSource> {
       cachedSource = "testimonials";
     }
   } catch (err) {
-    // If there's any error (network, auth, etc.), default to testimonies
-    cachedSource = "testimonies";
+    cachedSource = "testimonials"; // Default to new table
   }
 
   return cachedSource;
@@ -48,41 +46,40 @@ export function normalizeTestimonialRow(
 ): NormalizedTestimonial {
   if (source === "testimonials") {
     return {
-      id: row.id,
-      name: row.name,
-      role: row.role,
-      organization: row.organization ?? null,
-      photo_url: row.photo_url ?? null,
-      testimonial_text: row.testimonial_text ?? "",
-      video_url: row.video_url ?? null,
-      is_featured: row.is_featured ?? false,
-      status: (row.status as "active" | "hidden") ?? "hidden",
-      cohort: (row.cohort as string | null) ?? null,
-      created_at: row.created_at ?? null,
+      id: row.id as string,
+      name: row.name as string,
+      role: row.role as string,
+      organization: (row.organization as string | null) ?? null,
+      photo_url: (row.photo_url as string | null) ?? null,
+      testimonial_text: (row.testimonial_text as string) ?? "",
+      video_url: (row.video_url as string | null) ?? null,
+      is_featured: (row.is_featured as boolean) ?? false,
+      status: (row.status as "pending" | "approved" | "rejected") ?? "pending",
+      created_at: (row.created_at as string | null) ?? null,
+      updated_at: (row.updated_at as string | null) ?? null,
     };
   }
 
-  // Legacy table mapping
+  // Legacy table mapping (testimonies -> testimonials)
   return {
-    id: row.id,
-    name: row.name,
-    role: row.role ?? "Student",
-    organization: row.organization ?? null,
-    photo_url: row.image_url ?? null,
-    testimonial_text: row.testimony ?? "",
-    video_url: row.video_url ?? null,
-    is_featured: row.featured ?? false,
-    status:
-      (row.status as "active" | "hidden") ?? (row.approved ? "active" : "hidden"),
-    cohort: row.cohort ?? null,
-    created_at: row.created_at ?? null,
+    id: row.id as string,
+    name: row.name as string,
+    role: "Student", // Legacy table doesn't have role
+    organization: (row.contact as string | null) ?? null,
+    photo_url: (row.image_url as string | null) ?? null,
+    testimonial_text: (row.testimony as string) ?? "",
+    video_url: (row.video_url as string | null) ?? null,
+    is_featured: false,
+    status: (row.approved as boolean) ? "approved" : "pending",
+    created_at: (row.created_at as string | null) ?? null,
   };
 }
 
 export const buildTestimonialSelect = (source: TestimonialSource) => {
   if (source === "testimonials") {
-    return "id, name, role, organization, testimonial_text, photo_url, video_url, is_featured, status, cohort, created_at";
+    return "id, name, role, organization, testimonial_text, photo_url, video_url, is_featured, status, created_at, updated_at";
   }
 
-  return "id, name, role, organization, testimony, image_url, video_url, featured, status, approved, cohort, created_at";
+  // Legacy table columns
+  return "id, name, contact, image_url, video_url, testimony, approved, created_at";
 };
