@@ -18,11 +18,12 @@ type Testimonial = NormalizedTestimonial;
 
 const PAGE_SIZE = 12;
 
-const categories = [
+const roles = [
   { label: "All", value: "all" },
   { label: "Student", value: "Student" },
-  { label: "Client", value: "Client" },
+  { label: "Alumni", value: "Alumni" },
   { label: "Partner", value: "Partner" },
+  { label: "Mentor", value: "Mentor" },
 ];
 
 const extractYoutubeId = (url: string | null) => {
@@ -78,9 +79,13 @@ const Testimonials = () => {
       .from("testimonials")
       .select(select)
       .eq("status", "approved")
-      .order("created_at", { ascending: false });
+      .order("name", { ascending: true });
 
-    console.log(`Building query for approved testimonials`);
+    if (selectedCategory !== "all") {
+      query = query.eq("role", selectedCategory);
+    }
+
+    console.log(`Building query for approved testimonials, role filter: ${selectedCategory}`);
 
     return { query };
   };
@@ -113,10 +118,7 @@ const Testimonials = () => {
 
       let fetched = (data ?? []).map((row: Record<string, unknown>) => normalizeTestimonialRow(row, "testimonials"));
       
-      // Apply client-side filtering for category
-      if (selectedCategory !== "all") {
-        fetched = fetched.filter(t => t.role === selectedCategory);
-      }
+      // Apply client-side filtering for cohort and search (role filtering is now at database level)
       if (selectedCohort !== "all") {
         fetched = fetched.filter(t => t.cohort === selectedCohort);
       }
@@ -187,12 +189,12 @@ const Testimonials = () => {
               </div>
               <Select value={selectedCategory} onValueChange={setSelectedCategory}>
                 <SelectTrigger className="w-full md:w-48">
-                  <SelectValue placeholder="Category" />
+                  <SelectValue placeholder="Role" />
                 </SelectTrigger>
                 <SelectContent>
-                  {categories.map((cat) => (
-                    <SelectItem key={cat.value} value={cat.value}>
-                      {cat.label}
+                  {roles.map((role) => (
+                    <SelectItem key={role.value} value={role.value}>
+                      {role.label}
                     </SelectItem>
                   ))}
                 </SelectContent>
