@@ -19,6 +19,7 @@ import BlogPost from "./pages/BlogPost";
 import Contact from "./pages/Contact";
 import Testimonials from "./pages/Testimonials";
 import SubmitTestimonial from "./pages/SubmitTestimonial";
+import Donate from "./pages/Donate";
 import AdminSetup from "./pages/AdminSetup";
 import Login from "./pages/Login";
 import NotFound from "./pages/NotFound";
@@ -70,6 +71,7 @@ const App = () => (
               <Route path="/login" element={<Login />} />
               <Route path="/admin-setup" element={<AdminSetup />} />
               <Route path="/admin" element={<ProtectedAdminRoute><Suspense fallback={<div className="min-h-screen flex items-center justify-center"><div className="animate-spin rounded-full h-32 w-32 border-b-2 border-primary"></div></div>}><AdminDashboard /></Suspense></ProtectedAdminRoute>} />
+              <Route path="/donate" element={<Donate />} />
               <Route path="/cohort/:slug" element={<Suspense fallback={<div className="min-h-screen flex items-center justify-center"><div className="animate-spin rounded-full h-32 w-32 border-b-2 border-primary"></div></div>}><CohortPage /></Suspense>} />
               <Route path="/community" element={<Suspense fallback={<div className="min-h-screen flex items-center justify-center"><div className="animate-spin rounded-full h-32 w-32 border-b-2 border-primary"></div></div>}><Community /></Suspense>} />
               <Route path="*" element={<NotFound />} />

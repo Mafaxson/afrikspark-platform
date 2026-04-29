@@ -1,11 +1,16 @@
-﻿import { useState, useEffect, useRef } from "react";
+﻿import { useState, useEffect, useRef, useMemo } from "react";
 import { Layout } from "@/components/Layout";
 import { Section, SectionHeader, AnimateOnScroll } from "@/components/SectionComponents";
 import { Button } from "@/components/ui/button";
-import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import { BookOpen, GraduationCap, Palette, Video, Camera, Code, Megaphone, Users, Briefcase, Heart, Star, MessageCircle, ArrowRight, ExternalLink } from "lucide-react";
+import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
+import { Label } from "@/components/ui/label";
+import { motion } from "framer-motion";
+import { BookOpen, GraduationCap, Palette, Video, Camera, Code, Megaphone, Users, Briefcase, Heart, Star, MessageCircle, ArrowRight, ExternalLink, Play, DollarSign, Rocket } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
+import { useToast } from "@/hooks/use-toast";
 import { Link } from "react-router-dom";
+import { buildTestimonialSelect, normalizeTestimonialRow, NormalizedTestimonial } from "@/lib/testimonials";
 
 function ApplicationButton() {
   const [settings, setSettings] = useState<{ application_link: string | null; is_open: boolean; note: string | null } | null>(null);
@@ -48,22 +53,22 @@ function ApplicationButton() {
 
   return (
     <div className="space-y-3">
-      {isOpen ? (
-        <Button size="lg" className="w-full" asChild>
-          <a href={settings?.application_link ?? "#"} target="_blank" rel="noopener noreferrer">
+      <Button size="lg" className="w-full" asChild disabled={!isOpen}>
+        {isOpen ? (
+          <a href={settings.application_link ?? "#"} target="_blank" rel="noopener noreferrer">
             Apply Now <ExternalLink className="ml-2 h-4 w-4" />
           </a>
-        </Button>
-      ) : (
-        <Button size="lg" className="w-full" disabled>
-          Apply Now
-        </Button>
-      )}
+        ) : (
+          <span>Apply Now</span>
+        )}
+      </Button>
       {isLoading ? (
         <p className="text-muted-foreground text-sm">Loading application settings…</p>
-      ) : (!isOpen ? (
-        <p className="text-muted-foreground text-sm">Applications are currently closed. Check back soon.</p>
-      ) : null)}
+      ) : !isOpen ? (
+        <p className="text-muted-foreground text-sm">Applications are currently closed. Join the waitlist.</p>
+      ) : (
+        <p className="text-muted-foreground text-sm">Applications are reviewed on motivation, commitment, and readiness to learn.</p>
+      )}
       {settings?.note ? <p className="text-sm text-muted-foreground">{settings.note}</p> : null}
     </div>
   );
@@ -124,7 +129,32 @@ function normalizeSkills(skills: string | string[] | null) {
 export default function DSS() {
   const [cohorts, setCohorts] = useState<Cohort[]>([]);
   const [isLoadingCohorts, setIsLoadingCohorts] = useState(true);
+  const [dssTestimonials, setDssTestimonials] = useState<NormalizedTestimonial[]>([]);
+  const [selectedTestimonial, setSelectedTestimonial] = useState<NormalizedTestimonial | null>(null);
+  const [testimonialFilter, setTestimonialFilter] = useState<"all" | "video" | "students" | "partners" | "mentors">("all");
+  const [testimonialsLoading, setTestimonialsLoading] = useState(true);
+  const [statValues, setStatValues] = useState<number[]>([0, 0, 0, 0, 0]);
+  const [hasAnimatedStats, setHasAnimatedStats] = useState(false);
+  const statsSectionRef = useRef<HTMLDivElement | null>(null);
   const isMountedRef = useRef(true);
+  const { toast } = useToast();
+
+
+  const testimonialCategories = [
+    { value: "all", label: "All" },
+    { value: "video", label: "Video Stories" },
+    { value: "students", label: "Students" },
+    { value: "partners", label: "Partners" },
+    { value: "mentors", label: "Mentors" },
+  ] as const;
+
+  const statTargets = [
+    { label: "Youth Trained", value: 200, suffix: "+" },
+    { label: "Cities Reached", value: 2, suffix: "" },
+    { label: "Target Scholars (2026)", value: 600, suffix: "" },
+    { label: "Startup Grants Planned", value: 100, suffix: "" },
+    { label: "Cities Targeted", value: 4, suffix: "" },
+  ];
 
   useEffect(() => {
     const fetchCohorts = async () => {
@@ -152,96 +182,314 @@ export default function DSS() {
       }
     };
 
+    const fetchTestimonials = async () => {
+      setTestimonialsLoading(true);
+      try {
+        const select = buildTestimonialSelect("testimonials");
+        const { data, error } = await supabase
+          .from("testimonials")
+          .select(select)
+          .eq("status", "approved")
+          .eq("program_tag", "DSS")
+          .order("created_at", { ascending: false });
+
+        if (!isMountedRef.current) return;
+        if (error) {
+          console.error("Failed to load DSS testimonials", error);
+          return;
+        }
+
+        const items = (data || []).map((row: Record<string, unknown>) => normalizeTestimonialRow(row, "testimonials"));
+        setDssTestimonials(items);
+      } catch (error) {
+        console.error("DSS testimonial fetch unexpected error", error);
+      } finally {
+        if (isMountedRef.current) {
+          setTestimonialsLoading(false);
+        }
+      }
+    };
+
     fetchCohorts();
+    fetchTestimonials();
 
     return () => {
       isMountedRef.current = false;
     };
   }, []);
 
+  useEffect(() => {
+    if (hasAnimatedStats || !statsSectionRef.current) return;
+
+    const observer = new IntersectionObserver(
+      ([entry]) => {
+        if (entry.isIntersecting) {
+          setHasAnimatedStats(true);
+          observer.disconnect();
+        }
+      },
+      { threshold: 0.25 }
+    );
+
+    observer.observe(statsSectionRef.current);
+
+    return () => observer.disconnect();
+  }, [hasAnimatedStats]);
+
+  useEffect(() => {
+    if (!hasAnimatedStats) return;
+
+    const duration = 1200;
+    const start = performance.now();
+    const easeOutQuad = (t: number) => t * (2 - t);
+
+    const animate = (timestamp: number) => {
+      const progress = Math.min((timestamp - start) / duration, 1);
+      setStatValues(statTargets.map((item) => Math.round(item.value * easeOutQuad(progress))));
+
+      if (progress < 1) {
+        requestAnimationFrame(animate);
+      }
+    };
+
+    requestAnimationFrame(animate);
+  }, [hasAnimatedStats]);
+
+  const filteredTestimonials = useMemo(() => {
+    return dssTestimonials.filter((item) => {
+      if (testimonialFilter === "video") return Boolean(item.video_url);
+      if (testimonialFilter === "students") return item.role.toLowerCase().includes("student");
+      if (testimonialFilter === "partners") return item.role.toLowerCase().includes("partner");
+      if (testimonialFilter === "mentors") return item.role.toLowerCase().includes("mentor");
+      return true;
+    });
+  }, [dssTestimonials, testimonialFilter]);
+
+  const latestVideoTestimonial = dssTestimonials.find((item) => item.video_url);
+
+  const applicationSectionCopy = "Applications are reviewed based on motivation, commitment, and readiness to learn.";
+
+  const statisticCards = statTargets.map((stat, index) => ({
+    ...stat,
+    value: statValues[index] ?? 0,
+  }));
+
+  const programBenefits = [
+    "100% Free Scholarship Training",
+    "Earn While You Learn",
+    "Freelancing Opportunities",
+    "Entrepreneurship Coaching",
+    "Career Mentorship",
+    "Industry Certificates",
+    "Alumni Community Access",
+    "Startup Pitch Opportunities",
+  ];
+
+  const learningAreas = [
+    "Graphic Design",
+    "Video Editing & Media",
+    "Web Development",
+    "App Development",
+    "Content Creation",
+    "AI Productivity Tools",
+    "Photography",
+    "Digital Marketing",
+    "Business & Entrepreneurship",
+  ];
+
+  const eligibilityItems = [
+    "Age 16–35",
+    "Completed High School (WASSCE/Equivalent)",
+    "Resident in Sierra Leone",
+    "Unable to access university due to financial barriers",
+    "Passionate and committed",
+    "Available for training sessions",
+    "No experience required",
+  ];
+
+
   return (
     <Layout>
       {/* Hero */}
-      <section className="bg-hero min-h-[50vh] flex items-center relative overflow-hidden">
-        <div className="absolute inset-0 bg-[radial-gradient(circle_at_30%_40%,hsl(25_95%_53%/0.15),transparent_60%)]" />
-        <div className="container mx-auto px-4 relative z-10 py-20">
-          <AnimateOnScroll>
-            <span className="inline-flex items-center gap-2 text-sm font-medium text-primary bg-primary/10 px-4 py-1.5 rounded-full mb-6">
-              <GraduationCap className="h-4 w-4" />
-              Digital Skills Scholarship
-            </span>
-            <h1 className="font-display text-4xl md:text-5xl font-bold text-primary-foreground mb-4 max-w-3xl">
-              Transform Your Future with <span className="text-gradient">Free Digital Skills</span> Training
-            </h1>
-            <p className="text-primary-foreground/70 text-lg max-w-xl mb-8">
-              The DSS program trains young people who completed high school but cannot attend university due to financial barriers. Gain practical skills and mentorship until you start earning.
-            </p>
-            <div className="flex flex-wrap gap-4">
-              <Button size="lg" variant="hero" asChild>
-                <a href="#apply">
-                  Apply Now <ArrowRight className="ml-2 h-4 w-4" />
-                </a>
-              </Button>
-              <Button size="lg" variant="hero-outline" asChild>
-                <a href="#about-dss">Learn More</a>
-              </Button>
+      <section className="relative overflow-hidden bg-slate-950 text-white">
+        <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_left,_rgba(56,189,248,0.20),transparent_25%),radial-gradient(circle_at_bottom_right,_rgba(245,158,11,0.18),transparent_30%)]" />
+        <div className="absolute inset-0 bg-[linear-gradient(135deg,rgba(15,23,42,0.85),rgba(15,23,42,0.55))]" />
+        <div className="container mx-auto px-4 relative z-10 py-24">
+          <div className="grid gap-12 lg:grid-cols-[1.35fr_0.9fr] items-center">
+            <div>
+              <span className="inline-flex items-center gap-2 rounded-full bg-white/10 px-4 py-2 text-sm font-semibold tracking-wide text-sky-200 mb-6">
+                <GraduationCap className="h-4 w-4" />
+                Digital Skills Scholarship
+              </span>
+              <motion.h1
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ duration: 0.6 }}
+                className="font-display text-5xl md:text-6xl font-bold tracking-tight max-w-3xl leading-tight"
+              >
+                Transform Talent Into Income.
+              </motion.h1>
+              <motion.p
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ duration: 0.6, delay: 0.1 }}
+                className="mt-6 max-w-2xl text-lg text-slate-300"
+              >
+                AfrikSpark’s Digital Skills Scholarship equips ambitious young Sierra Leoneans facing financial barriers with practical digital skills, mentorship, entrepreneurship training, and career pathways — completely free.
+              </motion.p>
+
+              <div className="mt-10 grid gap-4 sm:grid-cols-[minmax(240px,1fr)_auto_auto] items-start">
+                <div className="sm:col-span-1">
+                  <ApplicationButton />
+                </div>
+                <Button size="lg" variant="hero" asChild className="w-full sm:w-auto">
+                  <Link to="/testimonials">Watch Success Stories</Link>
+                </Button>
+                <Button size="lg" variant="hero" asChild className="w-full sm:w-auto">
+                  <Link to="/donate">Donate</Link>
+                </Button>
+              </div>
             </div>
-          </AnimateOnScroll>
+
+            <motion.div
+              initial={{ opacity: 0, scale: 0.98 }}
+              animate={{ opacity: 1, scale: 1 }}
+              transition={{ duration: 0.7, delay: 0.15 }}
+              className="overflow-hidden rounded-[2rem] border border-white/10 bg-white/5 p-8 shadow-[0_40px_120px_rgba(15,23,42,0.35)]"
+            >
+              <div className="grid gap-6">
+                <div className="rounded-3xl bg-slate-900/90 p-6 ring-1 ring-white/10">
+                  <div className="flex items-center gap-3 mb-4">
+                    <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-sky-500/10 text-sky-300">
+                      <Play className="h-6 w-6" />
+                    </div>
+                    <div>
+                      <p className="text-sm uppercase tracking-[0.22em] text-sky-300">Impact Snapshot</p>
+                      <p className="text-xl font-semibold text-white">Powered by purpose, people, and proven results.</p>
+                    </div>
+                  </div>
+                  <div className="space-y-3">
+                    <p className="text-sm text-slate-300">A premium training experience for young people who need a fair chance at a digital future.</p>
+                    <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                      <div className="rounded-2xl bg-slate-950/80 p-4">
+                        <p className="text-2xl font-semibold">100%</p>
+                        <p className="text-sm text-slate-400">Scholarship training</p>
+                      </div>
+                      <div className="rounded-2xl bg-slate-950/80 p-4">
+                        <p className="text-2xl font-semibold">Mentorship</p>
+                        <p className="text-sm text-slate-400">Career and startup support</p>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="grid gap-4 sm:grid-cols-2">
+                  <div className="rounded-3xl bg-slate-900/90 p-5 ring-1 ring-white/10">
+                    <p className="text-sm uppercase tracking-[0.22em] text-slate-400">Scholar Focus</p>
+                    <p className="mt-3 text-lg font-semibold text-white">Practical digital skills with real work outcomes.</p>
+                  </div>
+                  <div className="rounded-3xl bg-slate-900/90 p-5 ring-1 ring-white/10">
+                    <p className="text-sm uppercase tracking-[0.22em] text-slate-400">Partner Growth</p>
+                    <p className="mt-3 text-lg font-semibold text-white">Built for donors, employers and changemakers.</p>
+                  </div>
+                </div>
+              </div>
+            </motion.div>
+          </div>
         </div>
       </section>
 
       {/* About DSS */}
       <Section id="about-dss">
-        <SectionHeader badge="About DSS" title="What is the Digital Skills Scholarship?" description="" />
+        <SectionHeader badge="About DSS" title="The Digital Skills Scholarship was created to close the gap between talent and opportunity." description="" />
         <div className="max-w-4xl mx-auto">
           <AnimateOnScroll>
-            <div className="bg-card rounded-xl p-8 border border-border space-y-6">
+            <div className="bg-card rounded-xl p-10 border border-border space-y-8">
               <p className="text-muted-foreground text-lg leading-relaxed">
-                The <strong className="text-foreground">Digital Skills Scholarship (DSS)</strong> is AfrikSpark's flagship program designed to bridge the gap between talent and opportunity. In Sierra Leone, thousands of young people graduate from high school every year but cannot pursue higher education due to financial barriers.
+                Every year, thousands of young people finish high school in Sierra Leone but cannot continue to university because of financial barriers. Many are left without direction, opportunity, or a clear career pathway.
               </p>
               <p className="text-muted-foreground text-lg leading-relaxed">
-                DSS identifies these bright, motivated individuals and provides them with <strong className="text-foreground">free, intensive training</strong> in high-demand digital skills — from graphic design and videography to web development and content creation. But we don't stop at training.
+                DSS changes that story. We identify motivated young people and provide intensive hands-on training in high-demand skills such as graphic design, web development, content creation, freelancing, entrepreneurship, and AI productivity tools.
               </p>
               <p className="text-muted-foreground text-lg leading-relaxed">
-                Each scholar receives <strong className="text-foreground">mentorship, real-world project experience, and career support</strong> until they land their first paying client or job. Our goal is simple: turn potential into income, and talent into careers.
+                But we do not stop at training. Every scholar receives mentorship, real-world opportunities, and support until they begin earning income or building their own venture.
               </p>
-              <div className="grid grid-cols-2 md:grid-cols-4 gap-4 pt-4">
-                {[
-                  { value: "6 Months", label: "Training Duration" },
-                  { value: "100%", label: "Free of Charge" },
-                  { value: "1:5", label: "Mentor Ratio" },
-                  { value: "Until Hired", label: "Support Duration" },
-                ].map((stat) => (
-                  <div key={stat.label} className="text-center p-4 rounded-lg bg-primary/5 border border-primary/10">
-                    <div className="font-display text-2xl font-bold text-primary">{stat.value}</div>
-                    <div className="text-xs text-muted-foreground mt-1">{stat.label}</div>
-                  </div>
-                ))}
+              <div className="rounded-3xl bg-slate-950/80 p-8 border border-white/10">
+                <p className="text-xl font-semibold text-white">Our mission is simple:</p>
+                <ul className="mt-4 space-y-3 text-muted-foreground">
+                  <li>Turn potential into income.</li>
+                  <li>Turn talent into careers.</li>
+                  <li>Turn youth into job creators.</li>
+                </ul>
               </div>
             </div>
           </AnimateOnScroll>
         </div>
       </Section>
 
+      <Section>
+        <SectionHeader badge="Why Sponsor DSS?" title="Why Sponsor DSS?" description="By sponsoring the Digital Skills Scholarship, you help transform untapped youth potential into real income, careers, startups, and long-term economic growth in Sierra Leone." />
+        <div className="max-w-4xl mx-auto">
+          <div className="grid gap-6 md:grid-cols-2">
+            {[
+              {
+                title: "Empower Youth Employment",
+                description: "Help young people gain practical digital skills and income opportunities."
+              },
+              {
+                title: "Build Future Entrepreneurs",
+                description: "Support startup ideas, innovation, and job creation."
+              },
+              {
+                title: "Promote Digital Inclusion",
+                description: "Expand access to technology and opportunity."
+              },
+              {
+                title: "Create Real Social Impact",
+                description: "Reduce unemployment, idleness, and risky migration pathways."
+              },
+              {
+                title: "Strengthen Communities",
+                description: "One trained youth can uplift an entire family."
+              },
+              {
+                title: "Gain Visibility As A Partner",
+                description: "Sponsors may be recognized publicly (optional)."
+              }
+            ].map((benefit, index) => (
+              <motion.div
+                key={benefit.title}
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ duration: 0.35, delay: index * 0.1 }}
+                className="rounded-xl border border-border bg-card p-6"
+              >
+                <h3 className="font-semibold text-lg mb-2">{benefit.title}</h3>
+                <p className="text-muted-foreground text-sm">{benefit.description}</p>
+              </motion.div>
+            ))}
+          </div>
+          <div className="mt-12 text-center">
+            <Button size="lg" variant="hero" asChild>
+              <Link to="/donate">Donate</Link>
+            </Button>
+            <p className="text-sm text-muted-foreground mt-4">
+              For partnerships, grants, CSR sponsorships, or custom support packages, contact AfrikSpark directly.
+            </p>
+          </div>
+        </div>
+      </Section>
+
       {/* Eligibility Criteria */}
       <Section alt id="eligibility">
-        <SectionHeader badge="Who Can Apply?" title="Eligibility Criteria" description="Make sure you meet the following requirements before applying." />
+        <SectionHeader badge="Who Can Apply?" title="Eligibility Criteria" description="" />
         <div className="max-w-3xl mx-auto">
           <AnimateOnScroll>
             <div className="bg-card rounded-xl border border-border p-8">
               <ul className="space-y-4">
-                {[
-                  "Must be between 16 and 35 years old.",
-                  "Must have completed high school (SSCE/WASSCE or equivalent).",
-                  "Unable to attend university due to financial constraints.",
-                  "Must be a resident of Sierra Leone.",
-                  "Must have access to a smartphone or computer (we can help with this).",
-                  "Must be committed to attending the full 6-month training program.",
-                  "No prior experience in digital skills required — just passion and willingness to learn.",
-                  "Must be available for in-person or virtual training sessions as scheduled.",
-                ].map((item, i) => (
-                  <li key={`eligibility-${i}`} className="flex items-start gap-3">
-                    <div className="h-6 w-6 rounded-full bg-primary/10 flex items-center justify-center flex-shrink-0 mt-0.5">
+                {eligibilityItems.map((item, index) => (
+                  <li key={`eligibility-${index}`} className="flex items-start gap-3">
+                    <div className="mt-0.5 flex h-6 w-6 items-center justify-center rounded-full bg-primary/10">
                       <Star className="h-3 w-3 text-primary" />
                     </div>
                     <span className="text-muted-foreground">{item}</span>
@@ -370,15 +618,32 @@ export default function DSS() {
               <GraduationCap className="h-8 w-8 text-primary" />
             </div>
             <div>
-              <h3 className="font-display text-xl font-bold mb-2">Application Fee: LE 250</h3>
               <p className="text-muted-foreground">
-                A small application fee of <span className="font-semibold text-foreground">LE 250</span> is required to process your application. This helps us manage the selection process and ensure serious applicants.
+                Applications are merit-based and reviewed according to motivation, commitment, and readiness to learn.
               </p>
             </div>
             <div className="space-y-3">
               <ApplicationButton />
-              <p className="text-xs text-muted-foreground">You will be redirected to an external form where you can complete your application and make payment.</p>
             </div>
+          </div>
+        </div>
+      </Section>
+
+      <Section>
+        <div ref={statsSectionRef}>
+          <SectionHeader badge="Our Impact" title="Our Impact So Far" description="Transforming potential into opportunity across Sierra Leone." />
+          <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-5 gap-6">
+            {statisticCards.map((stat, index) => (
+              <AnimateOnScroll key={stat.label} delay={index * 80}>
+                <div className="rounded-[2rem] border border-white/10 bg-slate-950/80 p-6 shadow-xl shadow-slate-950/20">
+                  <div className="text-4xl md:text-5xl font-display font-bold text-white mb-2">
+                    {stat.value}
+                    {stat.suffix}
+                  </div>
+                  <div className="text-sm text-slate-300">{stat.label}</div>
+                </div>
+              </AnimateOnScroll>
+            ))}
           </div>
         </div>
       </Section>

@@ -31,6 +31,7 @@ export function Navbar() {
   const [isOpen, setIsOpen] = useState(false);
   const [scrolled, setScrolled] = useState(false);
   const [dropdownOpen, setDropdownOpen] = useState<string | null>(null);
+  const [newDonationCount, setNewDonationCount] = useState(0);
   const location = useLocation();
   const navigate = useNavigate();
   const { user, isAdmin, signOutImmediate } = useAuth();
