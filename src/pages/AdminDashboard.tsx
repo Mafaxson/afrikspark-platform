@@ -10,11 +10,12 @@ import { Section } from "@/components/SectionComponents";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/hooks/use-toast";
 import { BlogManagement } from "@/components/admin/BlogManagement";
+import { DonationManagement } from "@/components/admin/DonationManagement";
 import { TestimonialManagement } from "@/components/admin/TestimonialManagement";
 import { FileUploadService } from "@/lib/uploadService";
 import {
   Users, FileText, MessageSquare, GraduationCap, ChevronRight, Mail,
-  Check, X, Plus, Trash2, Edit, Star, UserCheck,
+  Check, X, Plus, Trash2, Edit, Star, UserCheck, Heart,
   Hash, Megaphone, Calendar, FolderOpen, Shield, Bell, Briefcase,
   Settings, Upload, Download, Eye, Image, Video, File, HardDrive
 } from "lucide-react";
@@ -73,11 +74,26 @@ interface NewsletterSubscriber {
   created_at: string;
 }
 
-type Tab = "overview" | "blog" | "messages" | "testimonies" | "community" | "newsletter";
+type Tab = "overview" | "blog" | "messages" | "donations" | "testimonies" | "community" | "newsletter";
 
 export default function AdminDashboard() {
   const { user, loading } = useAuth();
   const [activeTab, setActiveTab] = useState<Tab>("overview");
+
+  const { data: newDonationCountData } = useQuery({
+    queryKey: ["donationRequestBadge"],
+    queryFn: async () => {
+      const { count } = await supabase
+        .from("donation_requests")
+        .select("id", { count: "exact", head: true })
+        .eq("status", "New");
+      return count ?? 0;
+    },
+    staleTime: 5 * 60 * 1000,
+    refetchOnWindowFocus: false,
+  });
+
+  const donationTabLabel = `Donation Requests${newDonationCountData && newDonationCountData > 0 ? ` (${newDonationCountData})` : ""}`;
 
   if (loading) return <Layout><Section><p>Loading...</p></Section></Layout>;
 
@@ -85,6 +101,7 @@ export default function AdminDashboard() {
     { id: "overview", label: "Overview", icon: Users },
     { id: "blog", label: "Blog", icon: FileText },
     { id: "messages", label: "Contacts", icon: Mail },
+    { id: "donations", label: donationTabLabel, icon: Heart },
     { id: "testimonies", label: "Testimonials", icon: Star },
     { id: "community", label: "Community", icon: UserCheck },
     { id: "newsletter", label: "Newsletter", icon: Bell },
@@ -108,9 +125,10 @@ export default function AdminDashboard() {
           ))}
         </div>
 
-        {activeTab === "overview" && <OverviewPanel />}
+          {activeTab === "overview" && <OverviewPanel />}
         {activeTab === "blog" && <BlogPanel />}
         {activeTab === "messages" && <MessagesPanel />}
+        {activeTab === "donations" && <DonationManagement />}
         {activeTab === "testimonies" && <TestimoniesPanel />}
         {activeTab === "community" && <CommunityPanel />}
         {activeTab === "newsletter" && <NewsletterPanel />}
@@ -128,7 +146,7 @@ function OverviewPanel() {
     queryKey: ['adminOverviewStats'],
     queryFn: async () => {
       const source = await getTestimonialSource();
-      const [communityMembers, messages, blogs, testimonies, pending, channels, events, resources, newsletter] = await Promise.all([
+      const [communityMembers, messages, blogs, testimonies, pending, channels, events, resources, newsletter, donations] = await Promise.all([
         supabase.from("community_members").select("id", { count: "exact", head: true }),
         supabase.from("contact_messages").select("id", { count: "exact", head: true }),
         supabase.from("blog_posts").select("id", { count: "exact", head: true }),
@@ -138,6 +156,7 @@ function OverviewPanel() {
         supabase.from("events").select("id", { count: "exact", head: true }),
         supabase.from("resources").select("id", { count: "exact", head: true }),
         supabase.from("newsletter_subscribers").select("*", { count: "exact", head: true }),
+        supabase.from("donation_requests").select("id", { count: "exact", head: true }),
       ]);
 
       return {
@@ -150,6 +169,7 @@ function OverviewPanel() {
         events: events.count ?? 0,
         resources: resources.count ?? 0,
         newsletter: newsletter.count ?? 0,
+        donationRequests: donations.count ?? 0,
       };
     },
     staleTime: 5 * 60 * 1000, // 5 minutes
@@ -179,6 +199,7 @@ function OverviewPanel() {
     { label: "Channels", value: stats.channels ?? 0, icon: Hash },
     { label: "Events", value: stats.events ?? 0, icon: Calendar },
     { label: "Resources", value: stats.resources ?? 0, icon: FolderOpen },
+    { label: "Donation Requests", value: stats.donationRequests ?? 0, icon: Heart },
     { label: "Blog Posts", value: stats.blogs ?? 0, icon: FileText },
     { label: "Contact Messages", value: stats.messages ?? 0, icon: Mail },
     { label: "Testimonies", value: stats.testimonies ?? 0, icon: Star },

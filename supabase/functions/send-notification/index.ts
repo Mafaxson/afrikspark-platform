@@ -1,6 +1,7 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 
 const ADMIN_EMAIL = "ismealkamara20@gmail.com";
+const DSS_DONATION_EMAIL = "dss@afrikspark.tech";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -30,6 +31,12 @@ serve(async (req) => {
     } else if (type === "testimonial") {
       subject = "New Testimonial Submitted";
       body = `New testimonial submitted:\n\nName: ${data.name}\nMessage: ${data.message}`;
+    } else if (type === "dss_donation") {
+      subject = "New DSS Donation Support Request";
+      body = `A new DSS donation request has been submitted:\n\nName: ${data.name || "Not provided"}\nEmail: ${data.email || "Not provided"}\nAmount: $${Number(data.amount).toFixed(2)}\nMessage: ${data.message || "No message provided."}\n\nPlease review the donation request in the admin dashboard.`;
+    } else if (type === "dss_donation_lead") {
+      subject = "New DSS Donation Lead Inquiry";
+      body = `A new DSS donation inquiry has been submitted:\n\nFull Name: ${data.full_name || "Not provided"}\nOrganization: ${data.organization_name || "Not provided"}\nEmail: ${data.email || "Not provided"}\nPhone: ${data.phone || "Not provided"}\nWhatsApp: ${data.whatsapp || "Not provided"}\nCountry: ${data.country || "Not provided"}\nDonation Type: ${data.donation_type || "Not specified"}\nAmount: ${data.amount ? `${data.amount.toLocaleString()} ${data.currency || 'USD'}` : "Not specified"}\nPurpose: ${data.purpose || "Not specified"}\nPreferred Contact: ${data.contact_method || "Not specified"}\nMessage: ${data.message || "No message provided."}\n\nPlease review this donation lead in the admin dashboard and follow up promptly.`;
     } else if (type === "newsletter") {
       // Send newsletter to individual subscriber
       const newsletterSubject = `AfrikSpark: New Blog Post - ${data.blog_title}`;
@@ -87,7 +94,7 @@ serve(async (req) => {
       },
       body: JSON.stringify({
         from: "AfrikSpark <notifications@afrikspark.tech>",
-        to: [ADMIN_EMAIL],
+        to: [(type === "dss_donation" || type === "dss_donation_lead") ? DSS_DONATION_EMAIL : ADMIN_EMAIL],
         subject: subject,
         text: body,
       }),
